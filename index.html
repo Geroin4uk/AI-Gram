@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://generativelanguage.googleapis.com https://huggingface.co https://*.huggingface.co https://hf.co https://*.hf.co https://raw.githubusercontent.com https://cdn.jsdelivr.net https://esm.run; img-src 'self' data: blob: https:; media-src 'self' blob:; style-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://esm.run https://cdn.jsdelivr.net; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; manifest-src 'self'; frame-ancestors 'none'; upgrade-insecure-requests" />
+  <meta name="theme-color" content="#0e1621" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="AI Messenger" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icons/icon-192.png" type="image/png" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Фейк Telegram — Данил</title>
+  <link rel="stylesheet" href="css/app.css" />
+</head>
+<body>
+  <main class="phone" aria-label="Фейк Telegram">
+    <section class="screen registration-screen hidden" id="registrationScreen" aria-label="Регистрация">
+      <form class="registration-card" id="registrationForm">
+        <h1>Вход в мессенджер</h1>
+        <p>Создай локальный профиль один раз. При следующем открытии вход будет автоматическим.</p>
+        <input id="registrationNameInput" maxlength="22" placeholder="Твоё имя" autocomplete="name" required />
+        <input id="registrationHandleInput" maxlength="28" placeholder="Ник, например @danil" autocomplete="username" required pattern="@[\w\u0400-\u04FF]{2,27}" title="Ник должен начинаться с @ и содержать минимум 2 символа (латиница, кириллица, цифры, _)" />
+        <button class="registration-submit" type="submit">Зарегистрироваться</button>
+      </form>
+    </section>
+
+    <section class="screen" id="homeScreen" aria-label="Список чатов">
+      <header class="topbar">
+        <button class="icon-btn" id="burgerBtn" type="button" aria-label="Меню">☰</button>
+        <div class="title">
+          <strong id="homeTitle">Фейк Telegram</strong>
+          <div class="subtitle" id="homeSubtitle">3 чата • ИИ-персонажи и группа</div>
+        </div>
+        <button class="icon-btn" id="newChatBtn" type="button" aria-label="Открыть ИИ-комнату">👥</button>
+      </header>
+
+      <div class="chat-list">
+        <div class="search-bar">
+          <input id="searchInput" type="search" placeholder="Поиск" autocomplete="off" />
+        </div>
+        <div class="chat-actions">
+          <button class="mini-action" id="openPersonaBtn" type="button">Свой персонаж</button>
+          <button class="mini-action" id="autoChatBtn" type="button">Авто-диалог</button>
+        </div>
+        <div class="chat-list-inner" id="chatListInner"></div>
+      </div>
+
+      <div class="tile-board" id="tileBoard" role="grid" aria-label="Плитки Metro"></div>
+    </section>
+
+    <section class="screen chat-screen hidden" id="chatScreen" aria-label="Чат">
+      <header class="topbar">
+        <button class="icon-btn back-icon" id="backBtn" type="button" aria-label="Назад">‹</button>
+        <button class="avatar" id="avatarBtn" type="button" aria-label="Профиль"></button>
+        <div class="title">
+          <strong id="chatTitle">Выберите чат</strong>
+          <div class="status" id="status">был в сети только что</div>
+        </div>
+        <button class="icon-btn" id="callBtn" type="button" aria-label="Позвонить">☎</button>
+        <button class="icon-btn" id="videoCallBtn" type="button" aria-label="Видеозвонок">📹</button>
+        <button class="icon-btn" id="menuBtn" type="button" aria-label="Ещё">⋯</button>
+      </header>
+
+      <section class="messages" id="messages">
+        <div class="day">Сегодня</div>
+        <button class="virtual-spacer" id="virtualTopSpacer" type="button" tabindex="-1" aria-hidden="true"></button>
+        <div class="virtual-spacer-bottom" id="virtualBottomSpacer" aria-hidden="true"></div>
+        <div class="empty-chat-placeholder" aria-hidden="true">
+          <div>Выберите чат слева, чтобы начать переписку</div>
+        </div>
+        <div class="typing" id="typing" aria-live="polite">
+          <span id="typingName">Данил</span> <span id="typingStatusText">печатает</span>
+          <span class="typing-dots"><span></span><span></span><span></span></span>
+        </div>
+        <div class="sr-only" id="newMessageAnnouncer" role="status" aria-live="polite" aria-atomic="true"></div>
+      </section>
+
+      <div>
+        <div class="auto-chat-indicator" id="autoChatIndicator"><span id="autoChatText">Авто-диалог включён</span><button id="stopAutoChatBtn" type="button">Стоп</button></div>
+        <div class="reaction-panel" id="reactionPanel" role="group" aria-label="Реакции на сообщение">
+          <select class="emoji-picker" id="reactionEmojiSelect" aria-label="Выбрать эмодзи-реакцию"></select>
+          <button class="reaction-apply-btn" id="applyReactionBtn" type="button">Поставить</button>
+        </div>
+        <div class="message-context-menu" id="messageContextMenu" role="menu" aria-label="Меню сообщения">
+          <button type="button" role="menuitem" data-message-action="copy">Скопировать текст</button>
+          <button type="button" role="menuitem" data-message-action="reply">Ответить</button>
+          <button type="button" role="menuitem" data-message-action="select">Выбрать</button>
+          <button type="button" role="menuitem" data-message-action="delete">Удалить у меня</button>
+        </div>
+        <div class="chat-search-panel" id="chatSearchPanel">
+          <input id="chatSearchInput" type="search" placeholder="Поиск по сообщениям" autocomplete="off" />
+          <button class="mini-action" id="closeChatSearchBtn" type="button">Закрыть</button>
+        </div>
+        <div class="selection-bar" id="selectionBar">
+          <span id="selectionCount">Выбрано: 0</span>
+          <button class="mini-action" id="deleteSelectedBtn" type="button">Удалить</button>
+          <button class="mini-action" id="clearSelectionBtn" type="button">Снять</button>
+        </div>
+        <div class="reply-bar" id="replyBar">
+          <div class="reply-info"><strong id="replyAuthor">Ответ</strong><span id="replyText"></span></div>
+          <button class="reply-cancel" id="replyCancelBtn" type="button" aria-label="Отменить ответ">×</button>
+        </div>
+        <div class="attachment-preview" id="attachmentPreview" aria-live="polite">
+          <div class="attachment-preview-body" id="attachmentPreviewBody"></div>
+          <button class="mini-action" id="clearAttachmentBtn" type="button">Убрать</button>
+        </div>
+        <form class="composer" id="form">
+          <button class="icon-btn" id="attachBtn" type="button" aria-label="Вложение">＋</button>
+          <button class="icon-btn" id="stickerBtn" type="button" aria-label="Стикеры">😵</button>
+          <input id="imageInput" type="file" accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip" hidden />
+          <div class="composer-field">
+            <input id="messageInput" autocomplete="off" inputmode="text" enterkeyhint="send" placeholder="Сообщение" maxlength="280" aria-describedby="messageCounter" />
+            <span class="char-counter" id="messageCounter" aria-live="polite">0/280</span>
+          </div>
+          <button class="send-btn" id="sendBtn" type="submit" aria-label="Отправить">➤</button>
+        </form>
+      </div>
+    </section>
+
+    <div class="overlay" id="overlay"></div>
+    <div class="keyboard-hint" id="keyboardHint" role="status" aria-live="polite"></div>
+
+    <nav class="menu-popover home-menu" id="homeMenuPopover" aria-label="Главное меню">
+      <button class="menu-item" type="button" data-home-action="settings">⚙️ Настройки</button>
+      <button class="menu-item danger" type="button" data-home-action="full-reset">♻️ Полный сброс</button>
+    </nav>
+
+    <nav class="menu-popover tile-context-menu" id="tileContextMenu" aria-label="Настройка плитки">
+      <button class="menu-item" type="button" data-tile-size="small">▫️ Маленькая</button>
+      <button class="menu-item" type="button" data-tile-size="medium">◻️ Средняя</button>
+      <button class="menu-item" type="button" data-tile-size="wide">▭ Широкая</button>
+      <button class="menu-item" type="button" data-tile-size="large">⬜ Большая</button>
+      <button class="menu-item danger" type="button" data-tile-unpin="1">📌 Открепить плитку</button>
+    </nav>
+
+    <nav class="menu-popover" id="menuPopover" aria-label="Меню чата">
+      <button class="menu-item" type="button" data-action="profile">👤 Профиль</button>
+      <button class="menu-item" type="button" data-action="search">🔎 Поиск в чате</button>
+      <button class="menu-item" type="button" data-action="stats">📊 Статистика чата</button>
+      <button class="menu-item" type="button" data-action="export">⬇️ Экспортировать чат</button>
+      <button class="menu-item" type="button" data-action="mute">🔕 Звук</button>
+      <button class="menu-item" type="button" data-action="pin-tile" id="pinTileMenuItem">📌 Закрепить как плитку</button>
+      <button class="menu-item" type="button" data-action="settings">⚙️ Настройки</button>
+      <button class="menu-item" type="button" data-action="auto-chat" id="chatAutoMenuItem">⏱ Авто-диалог</button>
+      <button class="menu-item danger" type="button" data-action="clear">🧹 Очистить историю</button>
+      <button class="menu-item danger" type="button" data-action="delete-chat">🗑 Удалить чат</button>
+    </nav>
+
+    <dialog class="profile-card" id="chatStatsPanel" aria-label="Статистика чата">
+      <button class="panel-close-btn" type="button" data-panel-close aria-label="Закрыть">×</button>
+      <div class="panel-title">Статистика чата</div>
+      <div class="panel-subtitle" id="chatStatsSummary"></div>
+      <div class="chat-stats" id="chatStatsList"></div>
+    </dialog>
+
+    <dialog class="profile-card" id="profileCard" aria-label="Профиль">
+      <button class="panel-close-btn" type="button" data-panel-close aria-label="Закрыть">×</button>
+      <div class="big-avatar" id="profileAvatar"></div>
+      <div class="name" id="profileName"></div>
+      <div class="profile-row" id="profileHandle"></div>
+      <div class="profile-row" id="profileStatus"></div>
+      <div class="profile-row">Ответы: та же выбранная модель или локальные фразы</div>
+      <div class="profile-row" id="profileAbout"></div>
+    </dialog>
+
+    <dialog class="api-panel has-settings-back" id="apiPanel" aria-label="Настройки Нейросети">
+      <button class="panel-close-btn" type="button" data-panel-close aria-label="Закрыть">×</button>
+      <button class="settings-back-btn" type="button" data-settings-back>‹ Настройки</button>
+      <div class="panel-title">Умные ответы (ИИ)</div>
+      <div class="panel-subtitle">Один провайдер и модель используются для Данила, Ярика и групповых ИИ-персонажей.</div>
+      <div class="custom-section">
+        <label class="custom-label" for="aiProviderSelect">Провайдер</label>
+        <select class="custom-select" id="aiProviderSelect">
+          <option value="local">Локальный (встроенные фразы)</option>
+          <option value="neural">Нейросеть в браузере (офлайн, без сервера)</option>
+          <option value="gemma">Google AI Studio (Gemma/Gemini)</option>
+        </select>
+      </div>
+      <div id="neuralSettingsExt" class="is-hidden">
+        <div class="custom-section">
+          <div class="panel-subtitle" id="neuralBackendStatus">Определяю поддержку WebGPU…</div>
+          <div class="panel-subtitle" id="neuralModelInfo"></div>
+          <div class="neural-progress-track is-hidden" id="neuralProgressTrack"><div class="neural-progress-fill" id="neuralProgressFill"></div></div>
+          <div class="panel-subtitle" id="neuralProgressLabel"></div>
+          <button class="custom-btn" id="neuralLoadBtn" type="button">Скачать и включить модель</button>
+          <button class="custom-btn" id="neuralUnloadBtn" type="button">Удалить модель из кеша браузера</button>
+          <div class="panel-subtitle">Модель качается один раз (сотни МБ — гигабайты) и остаётся в кеше браузера. Рекомендуется делать это по Wi-Fi. Пока модель не загружена, ответы идут через встроенные фразы.</div>
+        </div>
+      </div>
+      <div id="apiSettingsExt" class="is-hidden">
+        <div class="custom-section">
+          <label class="custom-label" for="apiKeyInput">API Ключ (от Google AI Studio)</label>
+          <input class="custom-input" type="password" id="apiKeyInput" placeholder="Ваш API Ключ" autocomplete="off" />
+          <div class="panel-subtitle">Ключ нужен только для Google AI Studio. Для встроенной локальной модели он не требуется.</div>
+          <button class="custom-btn" id="googleGuideBtn" type="button">Подробная инструкция по ключу</button>
+          <div class="panel-subtitle">По умолчанию ключ берётся из переменной окружения страницы или хранится только в памяти вкладки.</div>
+          <label class="custom-check"><input id="persistApiKeyInput" type="checkbox" /> Сохранить ключ в следующей сессии</label>
+          <div class="panel-subtitle">Предупреждение: это небезопасно на чужом или общем устройстве — ключ будет записан в хранилище браузера.</div>
+        </div>
+        <div class="custom-section">
+          <label class="custom-label" for="apiModelInput">Модель (напр. gemini-2.0-flash)</label>
+          <input class="custom-input" id="apiModelInput" placeholder="gemini-2.0-flash" autocomplete="off" />
+        </div>
+      </div>
+      <div class="custom-actions">
+        <button class="custom-btn" id="saveApiBtn" type="button">Сохранить</button>
+        <button class="custom-btn" id="clearAiCacheBtn" type="button">Очистить кеш ИИ</button>
+      </div>
+    </dialog>
+
+    <dialog class="api-panel google-guide-panel has-settings-back" id="apiGuidePanel" aria-label="Инструкция Google AI Studio">
+      <button class="panel-close-btn" type="button" data-panel-close aria-label="Закрыть">×</button>
+      <button class="settings-back-btn" type="button" data-api-guide-back>‹ Вернуться к настройкам ИИ</button>
+      <div class="panel-title">Как взять API-ключ Google AI Studio</div>
+      <div class="panel-subtitle">Подробный безопасный маршрут: от входа в аккаунт до вставки ключа в это приложение.</div>
+      <div class="guide-steps">
+        <div class="guide-step"><strong>1. Открой сайт</strong><p>Перейди на aistudio.google.com в браузере. Лучше использовать обычную вкладку, а не режим инкогнито, чтобы вход в Google сохранился.</p></div>
+        <div class="guide-step"><strong>2. Войди в Google-аккаунт</strong><p>Нажми Sign in / Войти и выбери аккаунт. Если Google попросит принять условия Google AI Studio, прочитай их и подтверди.</p></div>
+        <div class="guide-step"><strong>3. Открой раздел ключей</strong><p>В верхней или боковой части интерфейса найди кнопку Get API key / Получить API key. Иногда она находится в меню API keys.</p></div>
+        <div class="guide-step"><strong>4. Создай ключ</strong><p>Нажми Create API key / Создать API key. Если появится выбор проекта Google Cloud, можно выбрать существующий проект или создать новый.</p></div>
+        <div class="guide-step"><strong>5. Скопируй значение</strong><p>После создания скопируй ключ целиком. Он обычно начинается с AIza и показывается один раз или скрывается после закрытия окна.</p></div>
+        <div class="guide-step"><strong>6. Вернись в настройки ИИ</strong><p>Нажми кнопку назад вверху этого окна, выбери провайдера Google AI Studio, вставь ключ в поле API Ключ и нажми Сохранить.</p></div>
+        <div class="guide-step"><strong>7. Проверь модель</strong><p>Оставь gemini-2.0-flash или впиши другую доступную модель из Google AI Studio. Если модель недоступна, приложение покажет ошибку API и временно ответит локально.</p></div>
+      </div>
+      <div class="guide-note">Не публикуй ключ в чатах, GitHub, скриншотах и общих документах. На чужом устройстве не включай сохранение ключа в браузере.</div>
+    </dialog>
+
+    <dialog class="theme-panel has-settings-back" id="themePanel" aria-label="Темы Telegram">
+      <button class="panel-close-btn" type="button" data-panel-close aria-label="Закрыть">×</button>
+      <button class="settings-back-btn" type="button" data-settings-back>‹ Настройки</button>
+      <div class="panel-title">Темы и анимации</div>
+      <div class="theme-grid">
+        <button class="theme-choice" type="button" data-theme="aurora"><span>Аврора</span><small>сине‑фиолетовый перелив</small></button>
+        <button class="theme-choice" type="button" data-theme="neon"><span>Неон</span><small>киберпанк и розовый свет</small></button>
+        <button class="theme-choice" type="button" data-theme="sunset"><span>Закат</span><small>оранжево‑малиновый градиент</small></button>
+        <button class="theme-choice" type="button" data-theme="ocean"><span>Океан</span><small>голубая глубина</small></button>
+        <button class="theme-choice" type="button" data-theme="forest"><span>Лес</span><small>зелёный спокойный режим</small></button>
+        <button class="theme-choice" type="button" data-theme="lilac"><span>Сирень</span><small>мягкий фиолетовый чат</small></button>
+        <button class="theme-choice" type="button" data-theme="mono"><span>Моно</span><small>чёрно‑серый минимализм</small></button>
+        <button class="theme-choice" type="button" data-theme="candy"><span>Кэнди</span><small>розовый мягкий градиент</small></button>
+        <button class="theme-choice" type="button" data-theme="matrix"><span>Матрица</span><small>тёмный зелёный терминал</small></button>
+        <button class="theme-choice" type="button" data-theme="coffee"><span>Кофе</span><small>тёплый коричневый уют</small></button>
+        <button class="theme-choice" type="button" data-theme="ice"><span>Лёд</span><small>холодный голубой свет</small></button>
+        <button class="theme-choice" type="button" data-theme="custom"><span>Своя</span><small>выберите цвета и нажмите «Применить»</small></button>
+      </div>
+      <div class="settings-group">
+        <div class="settings-group-title">Автотема</div>
+        <div class="panel-subtitle">Если включено, приложение само переключается между светлой и тёмной темой вслед за настройками устройства, независимо от выбранной темы выше.</div>
+        <div class="toggle-row">Следовать системе <button class="switch" id="systemThemeSwitch" type="button" aria-label="Следовать теме устройства"></button></div>
+      </div>
+      <div class="custom-section">
+        <div class="custom-label"><span>Своя кастомизация цветов</span><span>выбор оттенков</span></div>
+        <div class="color-grid">
+          <label class="color-control">Фон<input id="customAppColor" type="color" value="#0e1621" /></label>
+          <label class="color-control">Панель<input id="customPanelColor" type="color" value="#17212b" /></label>
+          <label class="color-control">Акцент<input id="customAccentColor" type="color" value="#2aabee" /></label>
+          <label class="color-control">Мои сообщения<input id="customBubbleMeColor" type="color" value="#2b5278" /></label>
+          <label class="color-control">Ответы бота<input id="customBubbleHimColor" type="color" value="#182533" /></label>
+          <label class="color-control">Текст<input id="customTextColor" type="color" value="#f2f7fb" /></label>
+        </div>
+        <div class="custom-actions">
+          <button class="custom-btn" id="applyCustomThemeBtn" type="button">Применить свою</button>
+          <button class="custom-btn" id="resetCustomThemeBtn" type="button">Сбросить цвета</button>
+        </div>
+      </div>
+      <div class="toggle-row">Анимированный перелив <button class="switch" id="animationSwitch" type="button" aria-label="Анимация темы"></button></div>
+      <div class="toggle-row">Стеклянный интерфейс <button class="switch" id="glassSwitch" type="button" aria-label="Стеклянный режим"></button></div>
+    </dialog>
+
+    <dialog class="custom-panel has-settings-back" id="customPanel" aria-label="Кастомизация">
+      <button class="panel-close-btn" type="button" data-panel-close aria-label="Закрыть">×</button>
+      <button class="settings-back-btn" type="button" data-settings-back>‹ Настройки</button>
+      <div class="panel-title" id="customPanelTitle">Кастомизация персонажа</div>
+      <div class="custom-section">
+        <label class="custom-label" for="customNameInput">Имя в чате</label>
+        <input class="custom-input" id="customNameInput" maxlength="22" placeholder="Данил" autocomplete="off" />
+      </div>
+      <div class="custom-section">
+        <label class="custom-label" for="customHandleInput">Ник профиля</label>
+        <input class="custom-input" id="customHandleInput" maxlength="28" placeholder="@danil_fake_chat" autocomplete="off" />
+      </div>
+      <div class="custom-section">
+        <span class="custom-label">Аватарка</span>
+        <div class="avatar-grid" id="avatarGrid">
+          <button class="avatar-choice" type="button" data-avatar="Д">Д</button>
+          <button class="avatar-choice" type="button" data-avatar="😎">😎</button>
+          <button class="avatar-choice" type="button" data-avatar="🤨">🤨</button>
+          <button class="avatar-choice" type="button" data-avatar="🦆">🦆</button>
+          <button class="avatar-choice" type="button" data-avatar="🔥">🔥</button>
+          <button class="avatar-choice" type="button" data-avatar="💀">💀</button>
+          <button class="avatar-choice" type="button" data-avatar="🤖">🤖</button>
+          <button class="avatar-choice" type="button" data-avatar="🐺">🐺</button>
+          <button class="avatar-choice" type="button" data-avatar="🍕">🍕</button>
+          <button class="avatar-choice" type="button" data-avatar="👑">👑</button>
+        </div>
+      </div>
+      <div class="custom-section">
+        <label class="custom-label" for="styleSelect">Стиль общения</label>
+        <select class="custom-select" id="styleSelect">
+          <option value="sarcastic">Дружеский сарказм</option>
+          <option value="kind">Добрый бро</option>
+          <option value="chaos">Хаотичный мемолог</option>
+          <option value="teacher">Строгий наставник</option>
+          <option value="dry">Сухой тролль</option>
+          <option value="rough">Грубый голос и прямота</option>
+          <option value="gentle">Нежный голос и забота</option>
+        </select>
+      </div>
+      <div class="custom-section">
+        <label class="custom-label" for="roastRange">Уровень подколов: <span><span id="roastValue">3</span>/5</span></label>
+        <input class="custom-range" id="roastRange" type="range" min="1" max="5" value="3" />
+      </div>
+      <div class="custom-section">
+        <label class="custom-label" for="speedRange">Скорость ответа: <span id="speedValue">обычно</span></label>
+        <input class="custom-range" id="speedRange" type="range" min="1" max="3" value="2" />
+      </div>
+      <div class="custom-actions">
+        <button class="custom-btn" id="saveCustomBtn" type="button">Сохранить</button>
+        <button class="custom-btn" id="resetCustomBtn" type="button">Сбросить</button>
+      </div>
+    </dialog>
+
+    <dialog class="user-profile-panel has-settings-back" id="userProfilePanel" aria-label="Редактирование профиля">
+      <button class="panel-close-btn" type="button" data-panel-close aria-label="Закрыть">×</button>
+      <button class="settings-back-btn" type="button" data-settings-back>‹ Настройки</button>
+      <div class="panel-title">Мой профиль</div>
+      <div class="panel-subtitle">Это имя и ник твоего аккаунта, а не настройки Данила или Ярика.</div>
+      <div class="custom-section">
+        <label class="custom-label" for="userNameInput">Твоё имя</label>
+        <input class="custom-input" id="userNameInput" maxlength="22" placeholder="Твоё имя" autocomplete="name" />
+      </div>
+      <div class="custom-section">
+        <label class="custom-label" for="userHandleInput">Твой ник</label>
+        <input class="custom-input" id="userHandleInput" maxlength="28" placeholder="@username" autocomplete="username" />
+      </div>
+      <div class="custom-actions single">
+        <button class="custom-btn" id="saveUserProfileBtn" type="button">Сохранить профиль</button>
+      </div>
+    </dialog>
+
+    <dialog class="ui-panel settings-center has-settings-back" id="uiPanel" aria-label="Центр настроек">
+      <button class="panel-close-btn" type="button" data-panel-close aria-label="Закрыть">×</button>
+      <button class="settings-back-btn" type="button" data-close-settings>‹ Назад</button>
+      <div class="panel-title">Настройки</div>
+      <div class="panel-subtitle">Один центр управления: профиль, внешний вид, нейросеть, персонажи, данные и поведение чата.</div>
+      <div class="settings-shortcuts" aria-label="Разделы настроек">
+        <button class="settings-card" type="button" data-settings-open="profile"><strong>Профиль</strong><span>имя и ник аккаунта</span></button>
+        <button class="settings-card" type="button" data-settings-open="themes"><strong>Внешний вид</strong><span>темы, автотема, цвета</span></button>
+        <button class="settings-card" type="button" data-settings-open="tiles"><strong>Плитки Metro</strong><span>режим, размер, закрепление</span></button>
+        <button class="settings-card" type="button" data-settings-open="api"><strong>Нейросеть</strong><span>провайдер и модель</span></button>
+        <button class="settings-card" type="button" data-settings-open="persona"><strong>Персонажи</strong><span>создание и список</span></button>
+        <button class="settings-card" type="button" data-settings-open="custom"><strong>Текущий чат</strong><span>персонаж и стиль ответа</span></button>
+        <button class="settings-card" type="button" data-settings-open="personal"><strong>Чаты и уведомления</strong><span>фон, звук, вибрация</span></button>
+        <button class="settings-card danger" type="button" data-settings-open="reset"><strong>Сброс</strong><span>очистить данные</span></button>
+      </div>
+      <div class="ui-preview-card">Основные настройки собраны здесь; внешний вид, автотема и цвета находятся в одном разделе.</div>
+      <div class="settings-group">
+        <div class="settings-group-title">Отображение</div>
+        <div class="toggle-row">Компактный режим <button class="switch" id="compactSwitch" type="button"></button></div>
+        <div class="toggle-row">Крупный текст <button class="switch" id="largeTextSwitch" type="button"></button></div>
+        <div class="toggle-row">Скруглённые пузырьки <button class="switch" id="roundedSwitch" type="button"></button></div>
+      </div>
+      <div class="settings-group">
+        <div class="settings-group-title">Приложение</div>
+        <button class="custom-btn" id="installAppBtn" type="button">Установить как приложение</button>
+        <div class="ui-preview-card" id="installAppStatus">После установки чат откроется в собственном окне без адресной строки браузера и продолжит работать офлайн.</div>
+      </div>
+      <div class="settings-group">
+        <div class="settings-group-title">Приватность и список</div>
+        <div class="toggle-row">Скрывать превью в списке <button class="switch" id="hidePreviewSwitch" type="button"></button></div>
+      </div>
+      <div class="settings-group">
+        <div class="settings-group-title">Фон чата</div>
+        <div class="custom-section">
+          <label class="custom-label" for="wallpaperSelect">Фон диалога</label>
+          <select class="custom-select" id="wallpaperSelect">
+            <option value="pattern">Классический паттерн</option>
+            <option value="clean">Чистый тёмный</option>
+            <option value="dots">Точки</option>
+            <option value="grid">Сетка</option>
+            <option value="gradient">Градиент</option>
+          </select>
+        </div>
+        <div class="custom-section">
+          <label class="custom-label" for="languageSelect">Язык интерфейса</label>
+          <select class="custom-select" id="languageSelect">
+            <option value="auto">Автоматически</option>
+            <option value="ru">Русский</option>
+            <option value="en">English</option>
+            <option value="uk">Українська</option>
+          </select>
+        </div>
+      </div>
+      <div class="settings-group" id="chatPersonalGroup">
+        <div class="settings-group-title">Персонализация текущего чата</div>
+        <div class="custom-section">
+          <label class="custom-label" for="chatWallpaperSelect">Обои чата</label>
+          <select class="custom-select" id="chatWallpaperSelect">
+            <option value="inherit">Как в общих настройках</option>
+            <option value="clean">Цвет</option>
+            <option value="gradient">Градиент</option>
+            <option value="dots">Паттерн точки</option>
+            <option value="grid">Паттерн сетка</option>
+          </select>
+        </div>
+        <div class="toggle-row">Звук уведомлений <button class="switch" id="chatSoundSwitch" type="button"></button></div>
+        <div class="toggle-row">Вибрация <button class="switch" id="chatVibrateSwitch" type="button"></button></div>
+        <div class="toggle-row">Крупный текст в чате <button class="switch" id="chatLargeTextSwitch" type="button"></button></div>
+        <div class="toggle-row">Округлые сообщения чата <button class="switch" id="chatRoundedSwitch" type="button"></button></div>
+      </div>
+      <div class="settings-group">
+        <div class="settings-group-title">Авто-диалог</div>
+        <div class="custom-section">
+          <label class="custom-label" for="autoMinInput">Минимум секунд</label>
+          <input class="custom-input" id="autoMinInput" type="number" min="2" max="8" value="2" />
+        </div>
+        <div class="custom-section">
+          <label class="custom-label" for="autoMaxInput">Максимум секунд</label>
+          <input class="custom-input" id="autoMaxInput" type="number" min="2" max="8" value="8" />
+        </div>
+      </div>
+      <div class="settings-group">
+        <div class="settings-group-title">Резервное копирование</div>
+        <div class="custom-actions">
+          <button class="custom-btn" id="downloadBackupBtn" type="button">Скачать бэкап</button>
+          <button class="custom-btn" id="uploadBackupBtn" type="button">Загрузить бэкап</button>
+        </div>
+        <input id="backupInput" type="file" accept="application/json,.json" hidden />
+      </div>
+      <div class="custom-actions single">
+        <button class="custom-btn" id="saveUiBtn" type="button">Сохранить интерфейс</button>
+      </div>
+    </dialog>
+
+    <dialog class="custom-panel tile-manage-panel has-settings-back" id="tilePanel" aria-label="Плитки Metro">
+      <button class="panel-close-btn" type="button" data-panel-close aria-label="Закрыть">×</button>
+      <button class="settings-back-btn" type="button" data-settings-back>‹ Настройки</button>
+      <div class="panel-title">Плиточный режим (Metro UI)</div>
+      <div class="panel-subtitle">Живые плитки в стиле Windows 8 / Windows Phone вместо классического списка чатов. Цвета и градиенты плиток берутся из выбранной темы автоматически.</div>
+      <div class="toggle-row">Включить плиточный режим <button class="switch" id="tileModeSwitch" type="button"></button></div>
+      <div class="settings-group">
+        <div class="settings-group-title">Закреплённые плитки</div>
+        <div class="panel-subtitle" style="margin-top:-4px;margin-bottom:8px">Отметьте, что показать на доске. На самой доске: долгое нажатие без сдвига — размер/открепить; долгое нажатие и сразу потянуть — переместить плитку.</div>
+        <div class="tile-pin-list" id="tilePinList"></div>
+      </div>
+    </dialog>
+
+    <dialog class="sticker-panel" id="stickerPanel" aria-label="Стикеры">
+      <button class="panel-close-btn" type="button" data-panel-close aria-label="Закрыть">×</button>
+      <div class="panel-title">Тупые стикеры</div>
+      <div class="panel-subtitle">Нажми — отправится как отдельное сообщение.</div>
+      <div class="sticker-grid" id="stickerGrid"></div>
+    </dialog>
+
+    <dialog class="persona-panel has-settings-back" id="personaPanel" aria-label="Свой персонаж">
+      <button class="panel-close-btn" type="button" data-panel-close aria-label="Закрыть">×</button>
+      <button class="settings-back-btn" type="button" data-settings-back>‹ Настройки</button>
+      <div class="panel-title">Свой ИИ-персонаж</div>
+      <div class="panel-subtitle">Создай персонажа, задай промпт поведения и добавь его в личный чат или в группу.</div>
+      <div class="custom-section">
+        <label class="custom-label" for="personaNameInput">Имя</label>
+        <input class="custom-input" id="personaNameInput" maxlength="22" placeholder="Например: Мила" autocomplete="off" />
+      </div>
+      <div class="custom-section">
+        <label class="custom-label" for="personaAvatarInput">Аватар / эмодзи / буква</label>
+        <input class="custom-input" id="personaAvatarInput" maxlength="4" placeholder="✨" autocomplete="off" />
+      </div>
+      <div class="custom-section">
+        <label class="custom-label" for="personaPromptInput">Промпт поведения</label>
+        <textarea class="custom-input custom-textarea" id="personaPromptInput" placeholder="Отвечай мягко, коротко, с лёгкой иронией. Не говори, что ты ИИ."></textarea>
+      </div>
+      <div class="custom-section">
+        <label class="custom-check"><input id="personaAddToGroup" type="checkbox" checked /> Добавить в группу с ИИ</label>
+      </div>
+      <div class="custom-actions">
+        <button class="custom-btn" id="savePersonaBtn" type="button">Создать</button>
+        <button class="custom-btn" id="clearPersonaFormBtn" type="button">Очистить</button>
+      </div>
+      <div class="custom-section">
+        <span class="custom-label">Мои персонажи</span>
+        <div class="persona-list" id="personaList"></div>
+      </div>
+    </dialog>
+
+    <section class="tetris-easter" id="tetrisEaster" aria-label="Тетрис" aria-hidden="true">
+      <div class="tetris-card">
+        <div class="tetris-head">
+          <div>
+            <div class="tetris-title">TETRIS</div>
+            <div class="tetris-score" id="tetrisScore">0</div>
+          </div>
+          <button class="tetris-music" id="tetrisMusicBtn" type="button">♪ Музыка</button>
+          <button class="tetris-close" id="tetrisCloseBtn" type="button" aria-label="Закрыть тетрис">×</button>
+        </div>
+        <canvas class="tetris-canvas" id="tetrisCanvas" width="300" height="600"></canvas>
+        <div class="tetris-controls" aria-label="Управление тетрисом">
+          <button class="tetris-control" type="button" data-tetris="left">←</button>
+          <button class="tetris-control" type="button" data-tetris="rotate">↻</button>
+          <button class="tetris-control" type="button" data-tetris="right">→</button>
+          <button class="tetris-control" type="button" data-tetris="down">↓</button>
+        </div>
+        <div class="tetris-help">Стрелки — движение, вверх — поворот, пробел — падение, Esc — закрыть.</div>
+      </div>
+    </section>
+
+    <section class="call-screen" id="callScreen" aria-label="Звонок">
+      <div class="call-body">
+        <div class="video-stage" id="videoStage"></div>
+        <div class="call-avatar" id="callAvatar"></div>
+        <div class="call-name" id="callName">Данил</div>
+        <div class="call-status" id="callStatus">звонок идёт</div>
+        <div class="call-transcript" id="callTranscript">Нажми микрофон или напиши фразу.</div>
+        <input class="call-input" id="callTextInput" placeholder="Или напиши фразу для звонка" autocomplete="off" />
+      </div>
+      <div class="call-controls" id="callControls">
+        <button class="call-control" id="callMicBtn" type="button" aria-label="Говорить"><span class="control-icon" aria-hidden="true">🎙</span><span>говорить</span></button>
+        <button class="call-control" id="callSendBtn" type="button" aria-label="Сказать"><span class="control-icon" aria-hidden="true">➤</span><span>сказать</span></button>
+        <button class="call-control" id="callVideoBtn" type="button" aria-label="Видео"><span class="control-icon" aria-hidden="true">📹</span><span>видео</span></button>
+        <button class="call-control danger" id="callEndBtn" type="button" aria-label="Сбросить звонок"><span class="control-icon" aria-hidden="true">✕</span><span>сброс</span></button>
+      </div>
+    </section>
+
+    <div class="offline-indicator" id="offlineIndicator">Нет сети — исходящие сообщения будут отправлены после восстановления</div>
+    <div class="toast" id="toast"></div>
+  </main>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
