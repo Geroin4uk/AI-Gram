@@ -112,9 +112,8 @@ https://geroin4uk.github.io/AI-Gram/
 или клонируйте репозиторий
 
 git clone https://github.com/Geroin4uk/AI-Gram.git
-Перейдите в папку
 
-cd AI-Gram
+Перейдите в папку cd AI-Gram
 
 Откройте index.html
 или используйте любой локальный сервер
