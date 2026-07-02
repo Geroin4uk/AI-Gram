@@ -115,9 +115,8 @@ git clone https://github.com/Geroin4uk/AI-Gram.git
 Перейдите в папку
 
 cd AI-Gram
-Откройте
 
-index.html
+Откройте index.html
 или используйте любой локальный сервер
 
 python -m http.server
