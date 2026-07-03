@@ -348,7 +348,7 @@
       en: { message: 'Message', online: 'online', offline: 'Offline — outgoing messages will be queued until connection returns' },
       uk: { message: 'Повідомлення', online: 'у мережі', offline: 'Немає мережі — вихідні повідомлення буде надіслано після відновлення з’єднання' }
     });
-    const BACKUP_KEYS = ['aiPersonaChats', 'personaCustomSettings', 'danilCustomSettings', 'customAiPersonas', 'aiChatUiSettings', 'danilTheme', 'danilThemeAnimated', 'danilThemeGlass', 'danilCustomTheme', 'danilAiProvider', 'danilApiModel', 'messengerUserProfile'];
+    const BACKUP_KEYS = ['aiPersonaChats', 'personaCustomSettings', 'danilCustomSettings', 'customAiPersonas', 'aiChatUiSettings', 'danilTheme', 'danilThemeAnimated', 'danilThemeGlass', 'danilCustomTheme', 'danilAiProvider', 'danilApiModel', 'messengerUserProfile', 'aiPlugins', 'aiMemoryEnabled', 'aiVoiceDsp'];
     const SAFE_AI_PROVIDERS = new Set(Object.keys(API_CONFIG.providers));
     const SAFE_PERSONA_STYLES = new Set(Object.keys(STYLE_LABELS));
 
@@ -1746,11 +1746,31 @@
       const size = tileSizeFor(id);
       const tile = document.createElement('button');
       tile.type = 'button';
-      tile.className = `tile app-tile tile-size-${size}`;
       tile.dataset.tileId = id;
       tile.dataset.tileKind = 'app';
       tile.setAttribute('aria-label', meta.label);
       const extra = id === 'app:autochat' && autoChatRunning ? ' · вкл' : '';
+      // Живые плитки: статистика и монитор переворачиваются и показывают свежие метрики,
+      // которые обновляет refreshLiveTiles() раз в несколько секунд.
+      if (id === 'app:stats' || id === 'app:monitor') {
+        tile.className = `tile app-tile tile-live tile-size-${size}`;
+        const initialMetric = id === 'app:monitor'
+          ? `${perfMetrics.tps || 0} ток/с${perfMetrics.memMb ? ` · ${perfMetrics.memMb} МБ` : ''}`
+          : `${totalMessages()} сооб. · ${Object.keys(chats).length} чат.`;
+        tile.innerHTML = `<div class="tile-flip">
+            <div class="tile-face tile-face-front">
+              <div class="tile-icon">${meta.icon}</div>
+              <div class="tile-name">${escapeHtml(meta.label)}</div>
+              <div class="tile-hint">${escapeHtml(meta.hint)}</div>
+            </div>
+            <div class="tile-face tile-face-back">
+              <div class="tile-metric">${escapeHtml(initialMetric)}</div>
+              <div class="tile-name">${escapeHtml(meta.label)}</div>
+            </div>
+          </div>`;
+        return tile;
+      }
+      tile.className = `tile app-tile tile-size-${size}`;
       tile.innerHTML = `<div class="tile-face tile-face-front">
           <div class="tile-icon">${meta.icon}</div>
           <div class="tile-name">${escapeHtml(meta.label)}${extra}</div>
@@ -1843,6 +1863,10 @@
         else if (id === 'app:themes') { closeOverlay(); openUiPanel(); switchSettingsPanel('themes'); }
         else if (id === 'app:room') { if (!chats.group) setChats({ ...chats, group: defaultChats().group }); saveChats(); openChatWithTileAnimation('group', tileEl); }
         else if (id === 'app:persona') { closeOverlay(); openPersonaPanel(); }
+        else if (id === 'app:stats') { showToast(statsSummary()); }
+        else if (id === 'app:monitor') { showToast(monitorSummary()); }
+        else if (id === 'app:plugins') { closeOverlay(); openPanel('plugin'); }
+        else if (id === 'app:p2p') { closeOverlay(); openPanel('p2p'); }
         else if (id === 'app:autochat') {
           if (autoChatRunning) stopAutoChat(); else { if (!activeChatId) setActiveChatId('danil'); startAutoChat(); }
           updateChatMenuLabels();
@@ -2522,6 +2546,10 @@
         announceNewMessage(message, updatedChat);
       }
       renderChatList();
+      // RAG-память: индексируем текст сообщения (fire-and-forget, вне критического пути)
+      if (kind === 'text' && message.text) memoryIndexText(chatId, message.id, message.text, message.who);
+      // Плагины: не рассылаем события о сообщениях, созданных самими плагинами (анти-цикл)
+      if (!extra.fromPlugin && message.text) pluginDispatch({ chatId, text: String(message.text).slice(0, 2000), own: isOwnMessage(who), who: message.who, kind });
       return message;
     }
 
@@ -2802,7 +2830,7 @@
       if (!confirm(CONFIRM_MESSAGES.resetAll)) return;
       stopAutoChat();
       clearAppTimers();
-      ['aiPersonaChats','aiPersonaChatsEncrypted','aiMessengerEncryptionSecret','customAiPersonas','personaCustomSettings','danilCustomSettings','aiChatUiSettings','danilApiKeyPersisted','danilAiProvider','danilApiKey','danilApiModel','danilTheme','danilThemeAnimated','danilThemeGlass','danilCustomTheme','messengerUserProfile','aiReplyCache'].forEach(key => storageRemove(key));
+      ['aiPersonaChats','aiPersonaChatsEncrypted','aiMessengerEncryptionSecret','customAiPersonas','personaCustomSettings','danilCustomSettings','aiChatUiSettings','danilApiKeyPersisted','danilAiProvider','danilApiKey','danilApiModel','danilTheme','danilThemeAnimated','danilThemeGlass','danilCustomTheme','messengerUserProfile','aiReplyCache','aiPlugins','aiMemoryEnabled','aiVoiceDsp'].forEach(key => storageRemove(key));
       try {
         sessionStorage.removeItem('danilApiKey');
         sessionStorage.removeItem('danilApiKeySession');
@@ -2917,7 +2945,11 @@
         : 'Ты пишешь в личном чате.';
       const languageNames = { ru: 'русском', en: 'английском', uk: 'украинском' };
       const replyLanguage = languageNames[currentLanguage()] || 'русском';
-      return `Ты играешь живого персонажа по имени ${persona.name} в Telegram. Стиль: ${style}. ${userLine} ${groupRule}
+      const memoryContext = memoryContextByChat.get(chat?.id) || '';
+      const memoryBlock = memoryContext
+        ? `\nФакты и моменты из прошлых разговоров (используй естественно, если уместно, не цитируй списком):\n${memoryContext}`
+        : '';
+      return `Ты играешь живого персонажа по имени ${persona.name} в Telegram. Стиль: ${style}. ${userLine} ${groupRule}${memoryBlock}
 Пиши на ${replyLanguage} языке, коротко (обычно 1-2 предложения, не длиннее ${APP_LIMITS.maxAiReplyLength} символов) и естественно. Если тебе передали изображение, реально опиши или прокомментируй то, что видишь. Не говори, что ты ИИ или бот. Не повторяй одну и ту же фразу из прошлых сообщений; меняй формулировки, длину и интонацию. Пиши как живой собеседник: конкретно, спокойно, без шаблонных вступлений и канцелярита. Не обрывай мысль на середине — если не укладываешься, сократи содержание, а не предложение. Верни только одно сообщение без имени, кавычек и пояснений.`;
     }
 
@@ -3618,6 +3650,17 @@
           } else {
             const attachment = { name: file.name, type: file.type || 'application/octet-stream', size: file.size, data };
             addMessage(caption || file.name, 'me', reply, null, file.type.startsWith('video/') ? 'video' : 'attachment', { attachment });
+            // RAG-память: текстовые вложения режем на абзацы и индексируем, чтобы ИИ
+            // мог «вспоминать» их содержимое в будущих ответах.
+            if (memoryState.enabled && (/^(text\/plain|text\/csv|application\/json|text\/markdown)$/i.test(file.type) || /\.(txt|csv|json|md)$/i.test(file.name))) {
+              file.slice(0, 120000).text().then(content => {
+                const chatIdAtSend = activeChatId;
+                content.split(/\n{2,}|(?<=[.!?])\s+(?=[А-ЯA-Z])/).map(part => part.trim()).filter(part => part.length >= 40)
+                  .slice(0, 60)
+                  .forEach((part, index) => memoryIndexText(chatIdAtSend, `file:${file.name}:${index}`, part.slice(0, 400), 'me'));
+                showToast('Файл проиндексирован в память ИИ');
+              }).catch(() => {});
+            }
             scheduleAiReplies(`Пользователь отправил вложение: ${file.name}. Ответь коротко по контексту.`);
           }
           clearReply();
@@ -3878,18 +3921,27 @@
           if (!liveMsg) { setAiLoading(false, null, 'готовит ответ', chatId); liveMsg = createLiveAiMessage(chatId, first); }
           liveMsg?.update(partial);
         };
+        // RAG-память: подтягиваем релевантные куски прошлых разговоров в системный промпт.
+        // Контекст кладётся в memoryContextByChat, читается внутри buildSystemPrompt и удаляется в finally.
+        try { memoryContextByChat.set(chatId, await memoryContextForChat(chatId, text)); } catch { memoryContextByChat.delete(chatId); }
+        const genStartedAt = performance.now();
         try { reply = await getReply(text, first, imageData, targetChat, request.controller.signal, onFirstChunk); }
         catch {
           liveMsg?.remove();
           if (firstStale()) return;
           setAiLoading(false, null, 'готовит ответ', chatId); showToast('Не удалось получить ответ ИИ'); return;
         }
+        finally { memoryContextByChat.delete(chatId); }
+        recordGeneration((reply || '').length, performance.now() - genStartedAt);
         if (firstStale()) { liveMsg?.remove(); return; }
           const second = targetChat.type === 'group' ? targetChat.members.find(id => id !== first) : null;
         if (!second) aiRequestByChat.delete(chatId);
         markOwnMessagesRead(chatId);
         if (liveMsg) { liveMsg.finalize(reply); }
         else { setAiLoading(false, null, 'готовит ответ', chatId); addStreamingMessageToChat(chatId, reply, first); }
+        // Стриминговые сообщения создаются пустыми, поэтому индексируем и оповещаем плагины вручную
+        memoryIndexText(chatId, null, reply, first);
+        pluginDispatch({ chatId, text: String(reply || '').slice(0, 2000), own: false, who: first, kind: 'text' });
         scheduleVoiceMessage(chatId, first, text);
         if (chatId === activeChatId) status.textContent = targetChat.type === 'group' ? `${targetChat.members.length} ИИ-персонажа онлайн` : 'в сети';
         if (second) {
@@ -3909,13 +3961,19 @@
               if (!liveSecond) { setAiLoading(false, null, 'готовит ответ', chatId); liveSecond = createLiveAiMessage(chatId, second); }
               liveSecond?.update(partial);
             };
+            try { memoryContextByChat.set(chatId, await memoryContextForChat(chatId, reply)); } catch { memoryContextByChat.delete(chatId); }
+            const secondStartedAt = performance.now();
             try { botReply = await getReply(`${senderName(first)} написал: ${reply}. Коротко отреагируй и добавь свое мнение.`, second, null, stillTargetChat, request.controller.signal, onSecondChunk); }
             catch { liveSecond?.remove(); if (!request.controller.signal.aborted) { setAiLoading(false, null, 'готовит ответ', chatId); showToast('Не удалось получить второй ответ ИИ'); } return; }
+            finally { memoryContextByChat.delete(chatId); }
+            recordGeneration((botReply || '').length, performance.now() - secondStartedAt);
             if (secondStale()) { liveSecond?.remove(); return; }
             aiRequestByChat.delete(chatId);
             markOwnMessagesRead(chatId);
             if (liveSecond) { liveSecond.finalize(botReply); }
             else { setAiLoading(false, null, 'готовит ответ', chatId); addStreamingMessageToChat(chatId, botReply, second); }
+            memoryIndexText(chatId, null, botReply, second);
+            pluginDispatch({ chatId, text: String(botReply || '').slice(0, 2000), own: false, who: second, kind: 'text' });
             scheduleVoiceMessage(chatId, second, botReply);
             if (chatId === activeChatId) status.textContent = `${stillTargetChat.members.length} ИИ-персонажа онлайн`;
           }, 900 + Math.random() * 900);
@@ -4262,6 +4320,8 @@
         });
       }
       if (action === 'persona') switchSettingsPanel('persona', renderPersonaList);
+      if (action === 'plugin') switchSettingsPanel('plugin', renderPluginList);
+      if (action === 'p2p') switchSettingsPanel('p2p');
       if (action === 'custom') {
         const personaId = editablePersonaIdFromChat() || 'danil';
         if (!builtInPersonas[personaId]) { showToast('Кастомизация доступна в личном чате Данила или Ярика'); return; }
@@ -4457,10 +4517,18 @@
 
     function voiceProfileFor(persona) {
       const prompt = `${persona?.prompt || ''} ${persona?.style || ''} ${persona?.about || ''}`.toLowerCase();
-      if (/груб|низк|строг|жест|бас|злой|rough/.test(prompt)) return { pitch: 0.62, rate: 0.88, volume: 1 };
-      if (/нежн|мягк|доб|забот|тих|ласк|gentle|sensitive/.test(prompt)) return { pitch: 1.28, rate: 0.94, volume: 0.9 };
-      if (/хаос|мем|быстр|энерг/.test(prompt)) return { pitch: 1.08, rate: 1.12, volume: 1 };
-      return { pitch: 0.95, rate: 1, volume: 1 };
+      // roast (уровень подколов 1-5) добавляет голосу «жёсткости»: ниже тон, больше драйва
+      const settings = persona?.id && builtInPersonas[persona.id] ? getPersonaCustom(persona.id) : null;
+      const roast = Math.max(1, Math.min(5, settings?.roast ?? custom?.roast ?? 3));
+      const roastShift = (roast - 3) * 0.05; // -0.10 … +0.10
+      let profile;
+      if (/груб|низк|строг|жест|бас|злой|rough/.test(prompt)) profile = { pitch: 0.62, rate: 0.88, volume: 1, drive: 0.55, reverb: 0.1, filter: 2200, detune: -18 };
+      else if (/нежн|мягк|доб|забот|тих|ласк|gentle|sensitive/.test(prompt)) profile = { pitch: 1.28, rate: 0.94, volume: 0.9, drive: 0.04, reverb: 0.32, filter: 5200, detune: 6 };
+      else if (/хаос|мем|быстр|энерг/.test(prompt)) profile = { pitch: 1.08, rate: 1.12, volume: 1, drive: 0.28, reverb: 0.18, filter: 4200, detune: 24 };
+      else profile = { pitch: 0.95, rate: 1, volume: 1, drive: 0.12, reverb: 0.15, filter: 3500, detune: 0 };
+      profile.pitch = Math.max(0.4, Math.min(1.6, profile.pitch - roastShift));
+      profile.drive = Math.max(0, Math.min(1, profile.drive + (roast - 3) * 0.09));
+      return profile;
     }
 
     function pickVoice(profile) {
@@ -4504,6 +4572,13 @@
         utterance.onend = finish;
         utterance.onerror = finish;
         const voice = pickVoice(profile); if (voice) utterance.voice = voice;
+        // DSP-слой: во время звонка добавляем под голос текстуру персонажа
+        // (лёгкий дисторшн/реверб по параметрам style и roast). speechSynthesis нельзя
+        // маршрутизировать через Web Audio напрямую, поэтому текстура играет параллельно.
+        if (callScreen?.classList.contains('open')) {
+          const estimateMs = Math.min(9000, Math.max(700, (text || '').length * 62 / (profile.rate || 1)));
+          playCallVoiceTexture(profile, estimateMs);
+        }
         speechSynthesis.speak(utterance);
       };
       // Bug fix: speechSynthesis.getVoices() can return an empty list on the very first
@@ -4615,7 +4690,7 @@
     bindTap(document.getElementById('callBtn'), () => startCall(false));
     bindTap(document.getElementById('videoCallBtn'), () => startCall(true));
     bindTap(document.getElementById('callVideoBtn'), async () => { const next = !callScreen.classList.contains('video-mode'); callScreen.classList.toggle('video-mode', next); callStatus.textContent = next ? 'видеозвонок идёт' : 'звонок идёт'; await renderVideoStage(next); });
-    bindTap(document.getElementById('callEndBtn'), async () => { callScreen.classList.remove('open'); callScreen.classList.remove('video-mode'); await stopCamera(); window.speechSynthesis?.cancel?.(); listening?.stop?.(); });
+    bindTap(document.getElementById('callEndBtn'), async () => { callScreen.classList.remove('open'); callScreen.classList.remove('video-mode'); await stopCamera(); window.speechSynthesis?.cancel?.(); suspendCallAudio(); listening?.stop?.(); });
     bindTap(document.getElementById('callSendBtn'), () => answerInCall(callTextInput.value));
     callTextInput.addEventListener('keydown', e => { if (e.key === 'Enter') answerInCall(callTextInput.value); });
     bindTap(document.getElementById('callMicBtn'), () => {
@@ -4958,6 +5033,616 @@
     bindTap(document.getElementById('savePersonaBtn'), createCustomPersona);
     bindTap(document.getElementById('clearPersonaFormBtn'), () => { personaNameInput.value = ''; personaAvatarInput.value = ''; personaPromptInput.value = ''; });
     bindTap(document.getElementById('newChatBtn'), () => { if (!chats.group) setChats({ ...chats, group: defaultChats().group }); saveChats(); openChat('group'); });
+
+    // ==================================================================================
+    // Расширенные возможности: RAG-память, DSP-голос, плагины, живые плитки, P2P, share.
+    // Все функции самоинициализируются, feature-detect и обёрнуты в try/catch, чтобы
+    // отсутствие поддержки в браузере не ломало основное приложение.
+    // ==================================================================================
+
+    // ---- 1) Долгосрочная память (локальный RAG на эмбеддингах) ------------------------
+    const MEMORY_CONFIG = Object.freeze({
+      libUrl: 'https://esm.run/@huggingface/transformers',
+      modelId: 'Xenova/paraphrase-multilingual-MiniLM-L12-v2',
+      topK: 4,
+      minChars: 14,
+      maxContext: 900,
+      minScore: 0.36
+    });
+    const memoryState = { status: 'idle', extractor: null, enabled: storageGet('aiMemoryEnabled', 'false') === 'true' };
+    // Контекст памяти хранится per-chat: два чата могут генерировать ответы параллельно,
+    // и общая переменная привела бы к гонке (чужой контекст в чужом промпте).
+    const memoryContextByChat = new Map();
+    const memoryIndexed = new Set();
+    const memoryQueue = [];
+    let memoryWorking = false;
+
+    function memOpen() {
+      if (!('indexedDB' in window)) return Promise.reject(new Error('IndexedDB недоступен'));
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open('aiMemoryDb', 1);
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains('vectors')) {
+            const store = db.createObjectStore('vectors', { keyPath: 'id' });
+            store.createIndex('chatId', 'chatId', { unique: false });
+          }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error || new Error('memory db open failed'));
+      });
+    }
+    async function memPut(rows) {
+      const db = await memOpen();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction('vectors', 'readwrite');
+        const store = tx.objectStore('vectors');
+        rows.forEach(row => store.put(row));
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror = () => { db.close(); reject(tx.error); };
+      });
+    }
+    async function memByChat(chatId) {
+      const db = await memOpen();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction('vectors', 'readonly');
+        const rq = tx.objectStore('vectors').index('chatId').getAll(IDBKeyRange.only(chatId));
+        rq.onsuccess = () => { db.close(); resolve(rq.result || []); };
+        rq.onerror = () => { db.close(); reject(rq.error); };
+      });
+    }
+    async function memClear() {
+      const db = await memOpen();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction('vectors', 'readwrite');
+        tx.objectStore('vectors').clear();
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror = () => { db.close(); reject(tx.error); };
+      });
+    }
+
+    async function ensureExtractor() {
+      if (memoryState.extractor) return memoryState.extractor;
+      if (memoryState.status === 'loading') {
+        while (memoryState.status === 'loading') await new Promise(r => setTimeout(r, 180));
+        return memoryState.extractor;
+      }
+      memoryState.status = 'loading';
+      refreshMemoryStatus();
+      try {
+        const { pipeline, env } = await import(MEMORY_CONFIG.libUrl);
+        try { if (env) env.allowLocalModels = false; } catch {}
+        memoryState.extractor = await pipeline('feature-extraction', MEMORY_CONFIG.modelId);
+        memoryState.status = 'ready';
+      } catch (error) {
+        memoryState.status = 'error';
+        logSafe('memory model load failed', { code: error.name || 'load' });
+      }
+      refreshMemoryStatus();
+      return memoryState.extractor;
+    }
+    async function embedText(text) {
+      const extractor = await ensureExtractor();
+      if (!extractor) return null;
+      const output = await extractor(String(text).slice(0, 400), { pooling: 'mean', normalize: true });
+      return Array.from(output.data);
+    }
+    function cosineSim(a, b) {
+      if (!a || !b || a.length !== b.length) return 0;
+      let dot = 0;
+      for (let i = 0; i < a.length; i += 1) dot += a[i] * b[i];
+      return dot; // both vectors L2-normalized => dot product == cosine similarity
+    }
+    function memoryIndexText(chatId, id, text, who) {
+      if (!memoryState.enabled) return;
+      const clean = String(text || '').trim();
+      if (clean.length < MEMORY_CONFIG.minChars) return;
+      const key = id || `${chatId}:${clean.slice(0, 48)}`;
+      if (memoryIndexed.has(key)) return;
+      memoryIndexed.add(key);
+      memoryQueue.push({ chatId, id: key, text: clean.slice(0, 400), who });
+      processMemoryQueue();
+    }
+    async function processMemoryQueue() {
+      if (memoryWorking) return;
+      memoryWorking = true;
+      try {
+        while (memoryQueue.length) {
+          const item = memoryQueue.shift();
+          const vector = await embedText(item.text);
+          if (vector) await memPut([{ id: item.id, chatId: item.chatId, text: item.text, who: item.who, vector, at: Date.now() }]);
+          await new Promise(r => setTimeout(r, 12));
+        }
+      } catch (error) {
+        logSafe('memory index failed', { code: error.name || 'idx' });
+      } finally {
+        memoryWorking = false;
+      }
+    }
+    async function memoryContextForChat(chatId, query) {
+      if (!memoryState.enabled || !query) return '';
+      // Не блокируем ответ ИИ загрузкой модели (~100 МБ): если экстрактор ещё не готов,
+      // запускаем загрузку в фоне и в этот раз отвечаем без памяти.
+      if (memoryState.status !== 'ready') { ensureExtractor(); return ''; }
+      try {
+        const rows = await memByChat(chatId);
+        if (!rows.length) return '';
+        const queryVec = await embedText(query);
+        if (!queryVec) return '';
+        const scored = rows
+          .map(row => ({ text: row.text, score: cosineSim(queryVec, row.vector) }))
+          .filter(row => row.score >= MEMORY_CONFIG.minScore)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, MEMORY_CONFIG.topK);
+        if (!scored.length) return '';
+        let context = scored.map(row => `• ${row.text}`).join('\n');
+        if (context.length > MEMORY_CONFIG.maxContext) context = context.slice(0, MEMORY_CONFIG.maxContext);
+        return context;
+      } catch (error) {
+        logSafe('memory retrieve failed', { code: error.name || 'mem' });
+        return '';
+      }
+    }
+
+    const aiMemoryToggle = document.getElementById('aiMemoryToggle');
+    const aiMemoryStatus = document.getElementById('aiMemoryStatus');
+    const aiMemoryClearBtn = document.getElementById('aiMemoryClearBtn');
+    function refreshMemoryStatus() {
+      if (!aiMemoryStatus) return;
+      if (!memoryState.enabled) { aiMemoryStatus.textContent = 'Память выключена.'; return; }
+      const labels = { idle: 'Память включена. Модель загрузится при первом ответе.', loading: 'Загрузка модели памяти…', ready: 'Память активна.', error: 'Не удалось загрузить модель памяти.' };
+      aiMemoryStatus.textContent = labels[memoryState.status] || '';
+    }
+    if (aiMemoryToggle) {
+      aiMemoryToggle.checked = memoryState.enabled;
+      aiMemoryToggle.addEventListener('change', async () => {
+        memoryState.enabled = aiMemoryToggle.checked;
+        storageSet('aiMemoryEnabled', String(memoryState.enabled));
+        refreshMemoryStatus();
+        if (memoryState.enabled) { await ensureExtractor(); refreshMemoryStatus(); }
+      });
+    }
+    if (aiMemoryClearBtn) {
+      bindTap(aiMemoryClearBtn, async () => {
+        if (!confirm('Удалить всю сохранённую память ИИ?')) return;
+        try { await memClear(); memoryIndexed.clear(); showToast('Память ИИ очищена'); }
+        catch { showToast('Не удалось очистить память'); }
+      });
+    }
+    refreshMemoryStatus();
+
+    // ---- 2) DSP-движок голоса для звонков --------------------------------------------
+    let voiceDspEnabled = storageGet('aiVoiceDsp', 'true') !== 'false';
+    const callAudio = { ctx: null, master: null };
+    function ensureCallAudio() {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return null;
+      if (!callAudio.ctx) {
+        callAudio.ctx = new AudioCtx();
+        callAudio.master = callAudio.ctx.createGain();
+        callAudio.master.gain.value = 1;
+        callAudio.master.connect(callAudio.ctx.destination);
+      }
+      if (callAudio.ctx.state === 'suspended') callAudio.ctx.resume?.();
+      return callAudio.ctx;
+    }
+    function suspendCallAudio() { try { callAudio.ctx?.suspend?.(); } catch {} }
+    function makeDistortionCurve(amount) {
+      const k = Math.max(0, amount) * 90;
+      const n = 2048;
+      const curve = new Float32Array(n);
+      for (let i = 0; i < n; i += 1) {
+        const x = (i * 2) / n - 1;
+        curve[i] = ((3 + k) * x * 20 * Math.PI / 180) / (Math.PI + k * Math.abs(x));
+      }
+      return curve;
+    }
+    function makeReverbIR(ctx, seconds, decay) {
+      const rate = ctx.sampleRate;
+      const length = Math.max(1, Math.floor(rate * seconds));
+      const buffer = ctx.createBuffer(2, length, rate);
+      for (let channel = 0; channel < 2; channel += 1) {
+        const data = buffer.getChannelData(channel);
+        for (let i = 0; i < length; i += 1) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / length, decay);
+      }
+      return buffer;
+    }
+    function playCallVoiceTexture(profile, ms = 900) {
+      if (!voiceDspEnabled || !profile) return;
+      const ctx = ensureCallAudio();
+      if (!ctx) return;
+      try {
+        const start = ctx.currentTime;
+        const dur = Math.max(0.4, Math.min(2.4, ms / 1000));
+        const osc = ctx.createOscillator();
+        osc.type = 'sawtooth';
+        const baseHz = 118 * (profile.pitch || 1);
+        osc.frequency.setValueAtTime(baseHz, start);
+        osc.detune.value = profile.detune || 0;
+        const lfo = ctx.createOscillator();
+        lfo.frequency.value = 5.4;
+        const lfoGain = ctx.createGain();
+        lfoGain.gain.value = baseHz * 0.05;
+        lfo.connect(lfoGain).connect(osc.frequency);
+        const shaper = ctx.createWaveShaper();
+        shaper.curve = makeDistortionCurve(profile.drive || 0.1);
+        shaper.oversample = '2x';
+        const lowpass = ctx.createBiquadFilter();
+        lowpass.type = 'lowpass';
+        lowpass.frequency.value = profile.filter || 3500;
+        const env = ctx.createGain();
+        env.gain.setValueAtTime(0.0001, start);
+        env.gain.linearRampToValueAtTime(0.09, start + 0.06);
+        for (let t = 0.12; t < dur; t += 0.14) {
+          env.gain.linearRampToValueAtTime(0.028, start + t);
+          env.gain.linearRampToValueAtTime(0.09, start + t + 0.07);
+        }
+        env.gain.linearRampToValueAtTime(0.0001, start + dur);
+        const dry = ctx.createGain(); dry.gain.value = 0.85;
+        const wet = ctx.createGain(); wet.gain.value = profile.reverb || 0.15;
+        const conv = ctx.createConvolver(); conv.buffer = makeReverbIR(ctx, 1.1, 2.4);
+        osc.connect(shaper); shaper.connect(lowpass); lowpass.connect(env);
+        env.connect(dry); env.connect(conv); conv.connect(wet);
+        dry.connect(callAudio.master); wet.connect(callAudio.master);
+        osc.start(start); lfo.start(start);
+        osc.stop(start + dur + 0.05); lfo.stop(start + dur + 0.05);
+        osc.onended = () => { [osc, lfo, lfoGain, shaper, lowpass, env, dry, wet, conv].forEach(node => { try { node.disconnect(); } catch {} }); };
+      } catch (error) {
+        logSafe('call dsp failed', { code: error.name || 'dsp' });
+      }
+    }
+    const voiceDspToggle = document.getElementById('voiceDspToggle');
+    if (voiceDspToggle) {
+      voiceDspToggle.checked = voiceDspEnabled;
+      voiceDspToggle.addEventListener('change', () => {
+        voiceDspEnabled = voiceDspToggle.checked;
+        storageSet('aiVoiceDsp', String(voiceDspEnabled));
+      });
+    }
+
+    // ---- 3) Метрики + живые плитки (монитор ресурсов / статистика) --------------------
+    const perfMetrics = { tps: 0, memMb: 0, lastGenAt: 0 };
+    function recordGeneration(chars, ms) {
+      if (ms > 0 && chars > 0) {
+        const tokens = chars / 4; // грубая оценка токенов
+        perfMetrics.tps = Math.round((tokens / (ms / 1000)) * 10) / 10;
+        perfMetrics.lastGenAt = Date.now();
+      }
+    }
+    function readMemoryMb() {
+      try { const mem = performance.memory; if (mem && mem.usedJSHeapSize) perfMetrics.memMb = Math.round(mem.usedJSHeapSize / 1048576); } catch {}
+      return perfMetrics.memMb;
+    }
+    function totalMessages() { let total = 0; Object.values(chats).forEach(chat => { total += (chat.messages?.length || 0); }); return total; }
+    function monitorSummary() {
+      readMemoryMb();
+      const parts = [`Скорость: ${perfMetrics.tps || 0} ток/с`];
+      if (perfMetrics.memMb) parts.push(`Память вкладки: ${perfMetrics.memMb} МБ`);
+      parts.push(`Активных чатов: ${Object.keys(chats).length}`);
+      return parts.join(' • ');
+    }
+    function statsSummary() { return `Сообщений: ${totalMessages()} • Чатов: ${Object.keys(chats).length}`; }
+    function refreshLiveTiles() {
+      readMemoryMb();
+      document.querySelectorAll('[data-tile-id="app:monitor"] .tile-metric').forEach(el => {
+        el.textContent = `${perfMetrics.tps || 0} ток/с${perfMetrics.memMb ? ` · ${perfMetrics.memMb} МБ` : ''}`;
+      });
+      const msgs = totalMessages();
+      document.querySelectorAll('[data-tile-id="app:stats"] .tile-metric').forEach(el => {
+        el.textContent = `${msgs} сооб. · ${Object.keys(chats).length} чат.`;
+      });
+    }
+    setInterval(refreshLiveTiles, 4000);
+
+    // ---- 4) Плагины/боты в песочнице (Web Worker) ------------------------------------
+    const PLUGIN_TEMPLATES = {
+      greet: 'onMessage(m => {\n  if (!m.own && /привет|здаров|хай/i.test(m.text)) {\n    sendMessage("И тебе привет! 👋");\n  }\n});',
+      theme: 'onMessage(m => {\n  if (m.own && /ночь|тёмн|темно/i.test(m.text)) setTheme("mono");\n  if (m.own && /закат|тепло/i.test(m.text)) setTheme("sunset");\n});'
+    };
+    function loadPlugins() {
+      try { const arr = JSON.parse(storageGet('aiPlugins', '[]')); return Array.isArray(arr) ? arr.filter(p => p && typeof p.code === 'string' && typeof p.name === 'string') : []; }
+      catch { return []; }
+    }
+    function savePlugins(list) { storageSet('aiPlugins', JSON.stringify(list.slice(0, 30))); }
+    let plugins = loadPlugins();
+    const pluginWorkers = new Map();
+    function pluginBootstrapSource(code) {
+      return [
+        'self.__h={};',
+        'self.onMessage=function(f){self.__h.message=f;};',
+        'self.sendMessage=function(t){try{postMessage({type:"send",text:String(t==null?"":t).slice(0,2000)});}catch(e){}};',
+        'self.notify=function(t){try{postMessage({type:"notify",text:String(t==null?"":t).slice(0,300)});}catch(e){}};',
+        'self.setTheme=function(t){try{postMessage({type:"theme",theme:String(t==null?"":t).slice(0,40)});}catch(e){}};',
+        'self.log=function(t){try{postMessage({type:"log",text:String(t).slice(0,300)});}catch(e){}};',
+        'self.addEventListener("message",function(ev){var d=ev.data||{};if(d.type==="event"&&self.__h.message){try{self.__h.message(d.payload);}catch(e){postMessage({type:"error",text:String(e&&e.message||e)});}}});',
+        'try{\n' + code + '\n}catch(e){postMessage({type:"error",text:String(e&&e.message||e)});}'
+      ].join('\n');
+    }
+    function stopPluginWorker(id) {
+      const rec = pluginWorkers.get(id);
+      if (rec) { try { rec.worker.terminate(); } catch {} pluginWorkers.delete(id); }
+    }
+    function startPluginWorker(plugin) {
+      if (!('Worker' in window)) return;
+      stopPluginWorker(plugin.id);
+      try {
+        const src = pluginBootstrapSource(plugin.code);
+        const url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+        const worker = new Worker(url);
+        URL.revokeObjectURL(url);
+        const rec = { worker, lastSend: 0, name: plugin.name };
+        worker.onmessage = event => handlePluginAction(plugin, rec, event.data || {});
+        worker.onerror = () => { showToast(`Плагин «${plugin.name}»: ошибка выполнения`); };
+        pluginWorkers.set(plugin.id, rec);
+      } catch (error) { logSafe('plugin start failed', { code: error.name || 'plugin' }); }
+    }
+    function applyPluginTheme(name) {
+      if (THEME_CONFIG.themes.includes(name)) { try { applyTheme({ theme: name }); } catch {} }
+    }
+    function handlePluginAction(plugin, rec, data) {
+      if (!data || typeof data.type !== 'string') return;
+      if (data.type === 'send') {
+        const nowT = Date.now();
+        if (nowT - rec.lastSend < 1500) return; // анти-спам: не чаще раза в 1.5 c
+        rec.lastSend = nowT;
+        const chat = activeChat();
+        if (!chat) return;
+        const who = chat.members?.[0] || 'danil';
+        addMessageToChat(activeChatId, String(data.text || '').slice(0, 2000), who, null, null, 'text', { fromPlugin: true });
+      } else if (data.type === 'notify') {
+        showToast(`🧩 ${String(data.text || '').slice(0, 200)}`);
+      } else if (data.type === 'theme') {
+        applyPluginTheme(String(data.theme || ''));
+      } else if (data.type === 'error') {
+        showToast(`Плагин «${plugin.name}»: ${String(data.text || 'ошибка').slice(0, 120)}`);
+      }
+    }
+    function pluginDispatch(payload) {
+      if (!pluginWorkers.size) return;
+      pluginWorkers.forEach(rec => { try { rec.worker.postMessage({ type: 'event', payload }); } catch {} });
+    }
+    const pluginListEl = document.getElementById('pluginList');
+    const pluginNameInput = document.getElementById('pluginNameInput');
+    const pluginCodeInput = document.getElementById('pluginCodeInput');
+    function renderPluginList() {
+      if (!pluginListEl) return;
+      if (!plugins.length) { pluginListEl.innerHTML = '<div class="panel-subtitle">Пока нет плагинов. Напишите скрипт ниже.</div>'; return; }
+      pluginListEl.replaceChildren();
+      plugins.forEach(plugin => {
+        const row = document.createElement('div');
+        row.className = 'plugin-row';
+        const title = document.createElement('span');
+        title.className = 'plugin-row-name';
+        title.textContent = plugin.name;
+        const toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = `switch${plugin.enabled ? ' on' : ''}`;
+        toggle.setAttribute('aria-label', plugin.enabled ? 'Выключить' : 'Включить');
+        bindTap(toggle, () => {
+          plugin.enabled = !plugin.enabled;
+          savePlugins(plugins);
+          if (plugin.enabled) startPluginWorker(plugin); else stopPluginWorker(plugin.id);
+          renderPluginList();
+        });
+        const edit = document.createElement('button');
+        edit.type = 'button'; edit.className = 'mini-action'; edit.textContent = 'Изм.';
+        bindTap(edit, () => { if (pluginNameInput) pluginNameInput.value = plugin.name; if (pluginCodeInput) pluginCodeInput.value = plugin.code; pluginCodeInput?.focus(); });
+        const del = document.createElement('button');
+        del.type = 'button'; del.className = 'mini-action'; del.textContent = 'Удал.';
+        bindTap(del, () => { stopPluginWorker(plugin.id); plugins = plugins.filter(p => p.id !== plugin.id); savePlugins(plugins); renderPluginList(); });
+        row.append(title, toggle, edit, del);
+        pluginListEl.appendChild(row);
+      });
+    }
+    function savePluginFromForm() {
+      const name = (pluginNameInput?.value || '').trim().slice(0, 40);
+      const code = (pluginCodeInput?.value || '').trim();
+      if (!name || !code) { showToast('Укажите название и код плагина'); return; }
+      const existing = plugins.find(p => p.name === name);
+      if (existing) { existing.code = code; if (existing.enabled) startPluginWorker(existing); }
+      else plugins.push({ id: uid(), name, code, enabled: false });
+      savePlugins(plugins);
+      renderPluginList();
+      showToast('Плагин сохранён');
+    }
+    bindTap(document.getElementById('pluginSaveBtn'), savePluginFromForm);
+    bindTap(document.getElementById('pluginClearFormBtn'), () => { if (pluginNameInput) pluginNameInput.value = ''; if (pluginCodeInput) pluginCodeInput.value = ''; });
+    document.querySelectorAll('[data-plugin-template]').forEach(btn => bindTap(btn, () => {
+      const tpl = PLUGIN_TEMPLATES[btn.dataset.pluginTemplate];
+      if (tpl && pluginCodeInput) { pluginCodeInput.value = tpl; if (pluginNameInput && !pluginNameInput.value) pluginNameInput.value = btn.dataset.pluginTemplate === 'greet' ? 'Авто-приветствие' : 'Смена темы'; }
+    }));
+    plugins.filter(plugin => plugin.enabled).forEach(startPluginWorker);
+    renderPluginList();
+
+    // ---- 5) P2P-чат между людьми (WebRTC, ручная сигнализация копипастом) -------------
+    const p2p = { pc: null, dc: null, role: null };
+    const p2pEls = {
+      signalBox: document.getElementById('p2pSignalBox'),
+      outLabel: document.getElementById('p2pOutLabel'),
+      out: document.getElementById('p2pOutCode'),
+      inLabel: document.getElementById('p2pInLabel'),
+      in: document.getElementById('p2pInCode'),
+      status: document.getElementById('p2pStatus'),
+      log: document.getElementById('p2pLog'),
+      input: document.getElementById('p2pInput'),
+      send: document.getElementById('p2pSendBtn')
+    };
+    function p2pStatus(text) { if (p2pEls.status) p2pEls.status.textContent = text; }
+    function p2pAppendLog(kind, text) {
+      if (!p2pEls.log) return;
+      const row = document.createElement('div');
+      row.className = `p2p-msg p2p-msg-${kind}`;
+      row.textContent = kind === 'system' ? text : `${kind === 'me' ? 'Вы' : 'Собеседник'}: ${text}`;
+      p2pEls.log.appendChild(row);
+      p2pEls.log.scrollTop = p2pEls.log.scrollHeight;
+    }
+    function p2pB64encode(bytes) { let bin = ''; bytes.forEach(b => { bin += String.fromCharCode(b); }); return btoa(bin); }
+    function p2pB64decode(str) { const bin = atob(str.trim()); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i += 1) arr[i] = bin.charCodeAt(i); return arr; }
+    async function p2pPack(obj) {
+      const json = JSON.stringify(obj);
+      try {
+        if (window.CompressionStream) {
+          const stream = new Blob([json]).stream().pipeThrough(new CompressionStream('deflate'));
+          const buf = await new Response(stream).arrayBuffer();
+          return 'z:' + p2pB64encode(new Uint8Array(buf));
+        }
+      } catch {}
+      return 'j:' + p2pB64encode(new TextEncoder().encode(json));
+    }
+    async function p2pUnpack(code) {
+      const s = String(code || '').trim();
+      const bytes = p2pB64decode(s.slice(2));
+      if (s.startsWith('z:') && window.DecompressionStream) {
+        try {
+          const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate'));
+          const buf = await new Response(stream).arrayBuffer();
+          return JSON.parse(new TextDecoder().decode(buf));
+        } catch {}
+      }
+      return JSON.parse(new TextDecoder().decode(bytes));
+    }
+    function p2pWaitIce(pc) {
+      if (pc.iceGatheringState === 'complete') return Promise.resolve();
+      return new Promise(resolve => {
+        const check = () => { if (pc.iceGatheringState === 'complete') { pc.removeEventListener('icegatheringstatechange', check); resolve(); } };
+        pc.addEventListener('icegatheringstatechange', check);
+        setTimeout(resolve, 2600);
+      });
+    }
+    function p2pWireChannel(dc) {
+      p2p.dc = dc;
+      dc.onopen = () => {
+        p2pStatus('Соединение установлено. Можно писать.');
+        if (p2pEls.input) p2pEls.input.disabled = false;
+        if (p2pEls.send) p2pEls.send.disabled = false;
+        p2pAppendLog('system', 'Соединение установлено');
+      };
+      dc.onmessage = event => p2pAppendLog('peer', String(event.data).slice(0, 4000));
+      dc.onclose = () => {
+        p2pStatus('Соединение закрыто.');
+        if (p2pEls.input) p2pEls.input.disabled = true;
+        if (p2pEls.send) p2pEls.send.disabled = true;
+      };
+    }
+    function p2pWireConn(pc) {
+      pc.onconnectionstatechange = () => {
+        if (['failed', 'disconnected', 'closed'].includes(pc.connectionState)) p2pStatus(`Состояние: ${pc.connectionState}`);
+      };
+    }
+    function p2pReset() {
+      try { p2p.dc?.close?.(); } catch {}
+      try { p2p.pc?.close?.(); } catch {}
+      p2p.pc = null; p2p.dc = null; p2p.role = null;
+      if (p2pEls.input) p2pEls.input.disabled = true;
+      if (p2pEls.send) p2pEls.send.disabled = true;
+    }
+    async function p2pCreateInvite() {
+      if (!('RTCPeerConnection' in window)) { showToast('WebRTC не поддерживается'); return; }
+      p2pReset();
+      p2p.role = 'host';
+      p2p.pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+      p2pWireConn(p2p.pc);
+      p2pWireChannel(p2p.pc.createDataChannel('chat'));
+      const offer = await p2p.pc.createOffer();
+      await p2p.pc.setLocalDescription(offer);
+      await p2pWaitIce(p2p.pc);
+      if (p2pEls.signalBox) p2pEls.signalBox.classList.remove('is-hidden');
+      if (p2pEls.outLabel) p2pEls.outLabel.textContent = 'Ваш код-приглашение (передайте собеседнику)';
+      if (p2pEls.out) p2pEls.out.value = await p2pPack({ sdp: p2p.pc.localDescription });
+      if (p2pEls.inLabel) p2pEls.inLabel.textContent = 'Вставьте ответный код собеседника';
+      if (p2pEls.in) p2pEls.in.value = '';
+      p2pStatus('Отправьте код-приглашение и вставьте ответ.');
+    }
+    function p2pStartJoin() {
+      if (!('RTCPeerConnection' in window)) { showToast('WebRTC не поддерживается'); return; }
+      p2pReset();
+      p2p.role = 'guest';
+      if (p2pEls.signalBox) p2pEls.signalBox.classList.remove('is-hidden');
+      if (p2pEls.outLabel) p2pEls.outLabel.textContent = 'Ваш ответный код появится здесь';
+      if (p2pEls.out) p2pEls.out.value = '';
+      if (p2pEls.inLabel) p2pEls.inLabel.textContent = 'Вставьте код-приглашение';
+      if (p2pEls.in) p2pEls.in.value = '';
+      p2pStatus('Вставьте приглашение и нажмите «Применить код».');
+    }
+    async function p2pApplyCode() {
+      const code = (p2pEls.in?.value || '').trim();
+      if (!code) { showToast('Вставьте код'); return; }
+      try {
+        if (p2p.role === 'host') {
+          const data = await p2pUnpack(code);
+          await p2p.pc.setRemoteDescription(data.sdp);
+          p2pStatus('Ответ принят, устанавливаю соединение…');
+        } else if (p2p.role === 'guest') {
+          const data = await p2pUnpack(code);
+          p2p.pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+          p2pWireConn(p2p.pc);
+          p2p.pc.ondatachannel = event => p2pWireChannel(event.channel);
+          await p2p.pc.setRemoteDescription(data.sdp);
+          const answer = await p2p.pc.createAnswer();
+          await p2p.pc.setLocalDescription(answer);
+          await p2pWaitIce(p2p.pc);
+          if (p2pEls.out) p2pEls.out.value = await p2pPack({ sdp: p2p.pc.localDescription });
+          p2pStatus('Скопируйте ответный код и отправьте его хосту.');
+        } else {
+          showToast('Сначала создайте приглашение или начните присоединение');
+        }
+      } catch (error) {
+        logSafe('p2p apply failed', { code: error.name || 'p2p' });
+        showToast('Не удалось разобрать код');
+      }
+    }
+    function p2pSendMessage() {
+      const text = (p2pEls.input?.value || '').trim();
+      if (!text || !p2p.dc || p2p.dc.readyState !== 'open') return;
+      try { p2p.dc.send(text); p2pAppendLog('me', text); if (p2pEls.input) p2pEls.input.value = ''; }
+      catch { showToast('Сообщение не отправлено'); }
+    }
+    bindTap(document.getElementById('p2pCreateBtn'), p2pCreateInvite);
+    bindTap(document.getElementById('p2pJoinBtn'), p2pStartJoin);
+    bindTap(document.getElementById('p2pApplyBtn'), p2pApplyCode);
+    bindTap(document.getElementById('p2pCopyBtn'), () => { if (p2pEls.out?.value) copyTextToClipboard(p2pEls.out.value).then(ok => showToast(ok ? 'Код скопирован' : 'Скопируйте код вручную')); });
+    bindTap(p2pEls.send, p2pSendMessage);
+    p2pEls.input?.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); p2pSendMessage(); } });
+
+    // ---- 6) Интеграция с ОС: Share Target + File Handlers -----------------------------
+    function importSharedText(text) {
+      const clean = String(text || '').trim();
+      if (!clean) return;
+      const chatId = (activeChatId && chats[activeChatId]) ? activeChatId : 'danil';
+      if (!chats[chatId]) return;
+      addMessageToChat(chatId, clean.slice(0, 4000), 'me');
+      showToast('Добавлено из «Поделиться»');
+    }
+    function handleShareTargetParams() {
+      try {
+        const params = new URLSearchParams(location.search);
+        const shared = [params.get('title'), params.get('text'), params.get('url')].filter(Boolean).join(' ').trim();
+        if (shared) { importSharedText(shared); history.replaceState(null, '', location.pathname); }
+      } catch {}
+    }
+    if ('launchQueue' in window && window.launchQueue && 'setConsumer' in window.launchQueue) {
+      try {
+        window.launchQueue.setConsumer(async params => {
+          if (params && params.files && params.files.length) {
+            for (const handle of params.files) {
+              try { const file = await handle.getFile(); showAttachmentPreview(file); } catch {}
+            }
+          }
+        });
+      } catch {}
+    }
+    window.addEventListener('load', () => appSetTimeout(handleShareTargetParams, 700));
+
+    // Регистрация новых панелей и плиток
+    panelMap.plugin = document.getElementById('pluginPanel');
+    panelMap.p2p = document.getElementById('p2pPanel');
+    APP_TILES.push(
+      { id: 'app:stats', icon: '📊', label: 'Статистика', hint: 'активность чатов' },
+      { id: 'app:monitor', icon: '🩺', label: 'Монитор', hint: 'скорость и память' },
+      { id: 'app:plugins', icon: '🧩', label: 'Плагины', hint: 'свои боты' },
+      { id: 'app:p2p', icon: '🔗', label: 'P2P-чат', hint: 'связь с человеком' }
+    );
+
 
     function renderInitialShell() {
       setChats(defaultChats());

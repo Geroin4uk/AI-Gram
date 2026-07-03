@@ -10,6 +10,28 @@
   "display": "standalone",
   "orientation": "portrait",
   "categories": ["social", "productivity", "utilities"],
+  "share_target": {
+    "action": "./",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
+  "file_handlers": [
+    {
+      "action": "./",
+      "accept": {
+        "text/plain": [".txt", ".md"],
+        "text/csv": [".csv"],
+        "application/json": [".json"],
+        "image/png": [".png"],
+        "image/jpeg": [".jpg", ".jpeg"],
+        "image/webp": [".webp"]
+      }
+    }
+  ],
   "background_color": "#0e1621",
   "theme_color": "#2aabee",
   "icons": [

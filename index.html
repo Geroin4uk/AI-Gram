@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://generativelanguage.googleapis.com https://huggingface.co https://*.huggingface.co https://hf.co https://*.hf.co https://raw.githubusercontent.com https://cdn.jsdelivr.net https://esm.run; img-src 'self' data: blob: https:; media-src 'self' blob:; style-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://esm.run https://cdn.jsdelivr.net; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; manifest-src 'self'; frame-ancestors 'none'; upgrade-insecure-requests" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://generativelanguage.googleapis.com https://huggingface.co https://*.huggingface.co https://hf.co https://*.hf.co https://raw.githubusercontent.com https://cdn.jsdelivr.net https://esm.run; img-src 'self' data: blob: https:; media-src 'self' blob:; style-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://esm.run https://cdn.jsdelivr.net; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; manifest-src 'self'; upgrade-insecure-requests" />
   <meta name="theme-color" content="#0e1621" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -209,6 +209,18 @@
         <button class="custom-btn" id="saveApiBtn" type="button">Сохранить</button>
         <button class="custom-btn" id="clearAiCacheBtn" type="button">Очистить кеш ИИ</button>
       </div>
+      <div class="settings-group">
+        <div class="settings-group-title">Долгосрочная память (RAG)</div>
+        <label class="custom-check"><input id="aiMemoryToggle" type="checkbox" /> Помнить прошлые разговоры</label>
+        <div class="panel-subtitle">Персонажи смогут вспоминать старые сообщения и содержимое текстовых вложений. Эмбеддинги считаются локально в браузере (модель ~100 МБ качается один раз) и хранятся только на этом устройстве в IndexedDB.</div>
+        <div class="panel-subtitle" id="aiMemoryStatus"></div>
+        <button class="custom-btn" id="aiMemoryClearBtn" type="button">Очистить память ИИ</button>
+      </div>
+      <div class="settings-group">
+        <div class="settings-group-title">Голос в звонках</div>
+        <label class="custom-check"><input id="voiceDspToggle" type="checkbox" /> DSP-текстура голоса (Web Audio)</label>
+        <div class="panel-subtitle">Во время звонка под синтезированный голос подмешивается звуковая текстура персонажа: тон, лёгкий дисторшн и реверберация зависят от стиля и уровня подколов.</div>
+      </div>
     </dialog>
 
     <dialog class="api-panel google-guide-panel has-settings-back" id="apiGuidePanel" aria-label="Инструкция Google AI Studio">
@@ -353,6 +365,8 @@
         <button class="settings-card" type="button" data-settings-open="api"><strong>Нейросеть</strong><span>провайдер и модель</span></button>
         <button class="settings-card" type="button" data-settings-open="persona"><strong>Персонажи</strong><span>создание и список</span></button>
         <button class="settings-card" type="button" data-settings-open="custom"><strong>Текущий чат</strong><span>персонаж и стиль ответа</span></button>
+        <button class="settings-card" type="button" data-settings-open="plugin"><strong>Плагины</strong><span>свои боты и скрипты</span></button>
+        <button class="settings-card" type="button" data-settings-open="p2p"><strong>P2P-чат</strong><span>связь с реальным человеком</span></button>
         <button class="settings-card" type="button" data-settings-open="personal"><strong>Чаты и уведомления</strong><span>фон, звук, вибрация</span></button>
         <button class="settings-card danger" type="button" data-settings-open="reset"><strong>Сброс</strong><span>очистить данные</span></button>
       </div>
@@ -445,6 +459,59 @@
         <div class="settings-group-title">Закреплённые плитки</div>
         <div class="panel-subtitle tile-pin-note">Отметьте, что показать на доске. На самой доске: долгое нажатие без сдвига — размер/открепить; долгое нажатие и сразу потянуть — переместить плитку.</div>
         <div class="tile-pin-list" id="tilePinList"></div>
+      </div>
+    </dialog>
+
+    <dialog class="custom-panel plugin-panel has-settings-back" id="pluginPanel" aria-label="Плагины и боты">
+      <button class="panel-close-btn" type="button" data-panel-close aria-label="Закрыть">×</button>
+      <button class="settings-back-btn" type="button" data-settings-back>‹ Настройки</button>
+      <div class="panel-title">Плагины (песочница)</div>
+      <div class="panel-subtitle">JS-скрипты выполняются в изолированном Web Worker без доступа к странице, ключам и хранилищу. Доступно API: onMessage(fn), sendMessage(text), notify(text), setTheme(name), log(text). Отправка сообщений ограничена: не чаще одного раза в 1,5 секунды.</div>
+      <div class="plugin-list" id="pluginList"></div>
+      <div class="custom-section">
+        <label class="custom-label" for="pluginNameInput">Название плагина</label>
+        <input class="custom-input" id="pluginNameInput" maxlength="40" placeholder="Мой бот" autocomplete="off" />
+      </div>
+      <div class="custom-section">
+        <label class="custom-label" for="pluginCodeInput">Код (JavaScript)</label>
+        <textarea class="custom-input plugin-code" id="pluginCodeInput" rows="8" spellcheck="false" placeholder="onMessage(m => { if (m.own) notify('Вы написали: ' + m.text); });"></textarea>
+      </div>
+      <div class="custom-actions">
+        <button class="custom-btn" type="button" data-plugin-template="greet">Шаблон: приветствие</button>
+        <button class="custom-btn" type="button" data-plugin-template="theme">Шаблон: смена темы</button>
+      </div>
+      <div class="custom-actions">
+        <button class="custom-btn" id="pluginSaveBtn" type="button">Сохранить плагин</button>
+        <button class="custom-btn" id="pluginClearFormBtn" type="button">Очистить форму</button>
+      </div>
+    </dialog>
+
+    <dialog class="custom-panel p2p-panel has-settings-back" id="p2pPanel" aria-label="P2P-чат">
+      <button class="panel-close-btn" type="button" data-panel-close aria-label="Закрыть">×</button>
+      <button class="settings-back-btn" type="button" data-settings-back>‹ Настройки</button>
+      <div class="panel-title">P2P-чат (WebRTC)</div>
+      <div class="panel-subtitle">Прямое зашифрованное соединение между двумя браузерами без сервера. Обменяйтесь кодами любым удобным способом (мессенджер, почта, QR). Данные существуют только на ваших устройствах и не сохраняются в истории.</div>
+      <div class="custom-actions">
+        <button class="custom-btn" id="p2pCreateBtn" type="button">Создать приглашение</button>
+        <button class="custom-btn" id="p2pJoinBtn" type="button">Присоединиться по коду</button>
+      </div>
+      <div class="p2p-signal is-hidden" id="p2pSignalBox">
+        <div class="custom-section">
+          <label class="custom-label" id="p2pOutLabel" for="p2pOutCode">Ваш код</label>
+          <textarea class="custom-input p2p-code" id="p2pOutCode" rows="3" readonly></textarea>
+          <button class="custom-btn" id="p2pCopyBtn" type="button">Скопировать код</button>
+        </div>
+        <div class="custom-section">
+          <label class="custom-label" id="p2pInLabel" for="p2pInCode">Код собеседника</label>
+          <textarea class="custom-input p2p-code" id="p2pInCode" rows="3"></textarea>
+          <button class="custom-btn" id="p2pApplyBtn" type="button">Применить код</button>
+        </div>
+      </div>
+      <div class="panel-subtitle" id="p2pStatus">Создайте приглашение или присоединитесь по коду.</div>
+      <div class="p2p-log" id="p2pLog" aria-live="polite"></div>
+      <div class="p2p-compose">
+        <input class="custom-input" id="p2pInput" placeholder="Сообщение собеседнику" maxlength="4000" autocomplete="off" disabled />
+        <button class="custom-btn" id="p2pSendBtn" type="button" disabled>Отправить</button>
       </div>
     </dialog>
 

@@ -920,3 +920,25 @@
     }
     /* =================== /Metro / Live Tiles =================== */
 
+
+    /* =================== Plugins / P2P / Live tile metrics =================== */
+    .plugin-list { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
+    .plugin-row { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 12px; background: rgba(255,255,255,0.06); }
+    .plugin-row-name { flex: 1; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .plugin-row .mini-action { flex: none; padding: 5px 10px; border-radius: 9px; border: none; background: rgba(255,255,255,0.1); color: inherit; font-size: 12px; cursor: pointer; }
+    .plugin-row .mini-action:hover { background: rgba(255,255,255,0.18); }
+    .plugin-row .switch { flex: none; }
+    .plugin-code, .p2p-code { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace; font-size: 12px; line-height: 1.45; resize: vertical; min-height: 74px; }
+    .p2p-code { word-break: break-all; }
+    .p2p-signal { margin-top: 6px; }
+    .p2p-log { min-height: 72px; max-height: 200px; overflow-y: auto; margin: 10px 0; padding: 10px 12px; border-radius: 12px; background: rgba(0,0,0,0.22); display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+    .p2p-msg { padding: 6px 10px; border-radius: 10px; max-width: 92%; overflow-wrap: anywhere; }
+    .p2p-msg-me { align-self: flex-end; background: var(--accent, #2aabee); color: #fff; }
+    .p2p-msg-peer { align-self: flex-start; background: rgba(255,255,255,0.1); }
+    .p2p-msg-system { align-self: center; opacity: 0.65; font-size: 12px; background: none; padding: 2px 6px; }
+    .p2p-compose { display: flex; gap: 8px; align-items: stretch; }
+    .p2p-compose .custom-input { flex: 1; min-width: 0; }
+    .p2p-compose .custom-btn { flex: none; width: auto; padding-inline: 14px; }
+    .tile-metric { font-size: 13px; font-weight: 700; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; }
+    .tile-size-small .tile-metric { font-size: 11px; }
+    /* =================== /Plugins / P2P / Live tile metrics =================== */

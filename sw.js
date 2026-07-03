@@ -13,7 +13,7 @@
 // Версию кеша (CACHE_NAME) стоит менять при каждом заметном обновлении html-файла,
 // чтобы у пользователей подтянулась свежая версия оболочки.
 
-const CACHE_NAME = 'ai-messenger-shell-v4';
+const CACHE_NAME = 'ai-messenger-shell-v5';
 const APP_SHELL = [
   './',
   './index.html',
