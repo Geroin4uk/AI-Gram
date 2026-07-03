@@ -113,12 +113,17 @@ https://geroin4uk.github.io/AI-Gram/
 
 git clone https://github.com/Geroin4uk/AI-Gram.git
 
-Перейдите в папку cd AI-Gram
+Перейдите в папку: cd AI-Gram
 
-Откройте index.html
-или используйте любой локальный сервер
+Запустите локальный сервер, например:
 
 python -m http.server
+
+и откройте http://localhost:8000
+
+> ⚠️ Важно: приложение нужно открывать через http(s)-сервер (localhost или GitHub Pages).
+> При открытии index.html напрямую через file:// не работают Service Worker, установка PWA,
+> офлайн-режим и загрузка локальных моделей (CSP/CORS блокируют динамический импорт).
 ---
 
 #  Поддерживаемые AI

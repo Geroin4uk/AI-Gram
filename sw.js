@@ -13,7 +13,7 @@
 // Версию кеша (CACHE_NAME) стоит менять при каждом заметном обновлении html-файла,
 // чтобы у пользователей подтянулась свежая версия оболочки.
 
-const CACHE_NAME = 'ai-messenger-shell-v3';
+const CACHE_NAME = 'ai-messenger-shell-v4';
 const APP_SHELL = [
   './',
   './index.html',
@@ -21,15 +21,24 @@ const APP_SHELL = [
   './js/app.js',
   './manifest.json',
   './icons/icon-192.png',
-  './icons/icon-512.png'
+  './icons/icon-512.png',
+  './icons/icon-maskable-192.png',
+  './icons/icon-maskable-512.png'
 ];
 
 self.addEventListener('install', event => {
-  self.skipWaiting();
+  // Do NOT skipWaiting() automatically: activating a new worker mid-session can serve a
+  // mix of old and new shell assets (e.g. fresh app.js against a cached index.html).
+  // Instead the new worker waits; the page shows an "update ready" toast and applies it
+  // on the user's terms (message below) or on the next full open.
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => cache.addAll(APP_SHELL).catch(() => {}))
   );
+});
+
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', event => {

@@ -181,7 +181,7 @@
       }
     }
 
-    const appStore = new AppStore({ activeChatId: 'danil', chats: {}, overlay: false, panel: null, menu: null, focusedMessageId: null, aiProvider: 'local', apiKey: '', apiModel: 'gemini-2.0-flash', uiSettings: {}, loading: true });
+    const appStore = new AppStore({ activeChatId: 'danil', chats: {}, overlay: false, panel: null, menu: null, focusedMessageId: null, aiProvider: 'local', apiKey: '', apiModel: 'gemini-3.1-flash-lite', uiSettings: {}, loading: true });
     const AppContext = Object.freeze({
       get state() { return appStore.getState(); },
       subscribe: listener => appStore.subscribe(listener),
@@ -284,7 +284,7 @@
     const API_CONFIG = Object.freeze({
       providers: Object.freeze({ local: 'Локально', neural: 'Локальная LLM (браузер)', gemma: 'Google AI Studio' }),
       defaultProvider: 'local',
-      defaultModel: 'gemini-2.0-flash',
+      defaultModel: 'gemini-3.1-flash-lite',
       geminiBaseUrl: 'https://generativelanguage.googleapis.com/v1beta/models',
       modelPattern: /[^a-z0-9._:-]/gi
     });
@@ -2580,6 +2580,47 @@
       return message;
     }
 
+    // Live streaming: creates an empty incoming bubble and updates it in place as tokens
+    // arrive from the API (real streaming), instead of waiting for the full answer and then
+    // running the fake typewriter. Announce fires once, on finalize — not on the empty stub.
+    function createLiveAiMessage(chatId, who, reply = null) {
+      const chat = chats[chatId];
+      if (!chat) return null;
+      const message = { id: uid(), who, text: '', image: null, kind: 'text', time: now(), createdAt: Date.now(), reply, status: 'read' };
+      const updatedChat = updateChatInContext(chatId, draft => {
+        draft.messages.push(message);
+        draft.updatedAt = message.createdAt;
+        if (draft.messages.length > MAX_MESSAGES_PER_CHAT) draft.messages.splice(0, draft.messages.length - MAX_MESSAGES_PER_CHAT);
+        return draft;
+      }) || chat;
+      saveChats();
+      if (chatId === activeChatId && !chatScreen.classList.contains('hidden')) appendMessageNode(message, updatedChat);
+      renderChatList();
+      let lastPaint = 0;
+      return {
+        id: message.id,
+        update(text) {
+          const nowTime = performance.now();
+          if (nowTime - lastPaint < 55) return;
+          lastPaint = nowTime;
+          // Plain text while streaming (cheap, no markdown re-parse each token); markdown is
+          // applied once on finalize.
+          updateMessageText(chatId, message.id, String(text || ''), { deferSave: true, deferList: true, plain: true });
+        },
+        finalize(text) {
+          const final = String(text || '');
+          updateMessageText(chatId, message.id, final);
+          announceNewMessage({ ...message, text: final }, chats[chatId]);
+        },
+        remove() {
+          updateChatInContext(chatId, draft => { draft.messages = draft.messages.filter(item => item.id !== message.id); return draft; });
+          saveChats();
+          messages.querySelector(`.message[data-id="${CSS.escape(message.id)}"]`)?.remove();
+          renderChatList();
+        }
+      };
+    }
+
     function messageTextForAi(message) {
       const text = message.text || (message.attachment ? `Пользователь приложил файл ${message.attachment.name}.` : message.image ? 'Пользователь приложил картинку.' : message.kind === 'sticker' ? 'Пользователь отправил стикер.' : message.kind === 'voice' ? 'Голосовое сообщение.' : 'Сообщение.');
       const reactions = Array.isArray(message.reactions) && message.reactions.length ? ` Реакции: ${message.reactions.join(' ')}` : '';
@@ -2941,7 +2982,7 @@
       return `${provider}: ${details || `ошибка ${status}`}`;
     }
 
-    async function getGemmaReply(userText, persona, chat, imageData = null, signal = null) {
+    async function getGemmaReply(userText, persona, chat, imageData = null, signal = null, onChunk = null) {
       if (!apiKey) throw new Error('API-ключ Google AI Studio не введён');
       const apiKeyFingerprint = apiKey ? String(apiKey).slice(0, 8) : 'no-key';
       const cacheKey = `aiCache:${apiModel}:${apiKeyFingerprint}:${persona.id}:${userText.slice(0, 180)}:${imageData ? 'img' : 'txt'}`;
@@ -2956,7 +2997,7 @@
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: buildSystemPrompt(persona, chat) }] },
           contents,
-          generationConfig: { temperature: persona.id === 'yarik' ? 0.72 : 0.68, topP: 0.9, topK: 40, maxOutputTokens: 220, presencePenalty: 0.35, frequencyPenalty: 0.45 }
+          generationConfig: { temperature: persona.id === 'yarik' ? 0.72 : 0.68, topP: 0.9, topK: 40, maxOutputTokens: 512, presencePenalty: 0.35, frequencyPenalty: 0.45 }
         })
       });
       if (!res.ok) {
@@ -2986,6 +3027,8 @@
             try { appendSsePayload(payload); }
             catch (error) { logSafe('SSE chunk parse skipped', { code: error.name || 'json' }); }
           }
+          // Live preview: push the accumulated text to the caller as it streams in.
+          if (onChunk && raw) { try { onChunk(raw); } catch {} }
           if (done) break;
         }
         if (buffer.trim()) {
@@ -3476,10 +3519,10 @@
     bindTap(neuralUnloadBtn, () => { if (confirm('Убрать загруженную нейросеть из этой сессии?')) unloadNeuralEngine(); });
     detectNeuralBackend().then(renderNeuralStatus);
 
-    async function requestAiReplyByProvider(userText, persona, chat, imageData = null, signal = null) {
+    async function requestAiReplyByProvider(userText, persona, chat, imageData = null, signal = null, onChunk = null) {
       switch (aiProvider) {
         case 'gemma':
-          return getGemmaReply(userText, persona, chat, imageData, signal);
+          return getGemmaReply(userText, persona, chat, imageData, signal, onChunk);
         case 'neural':
           return getNeuralReply(userText, persona, chat, signal);
         case 'local':
@@ -3488,11 +3531,11 @@
       }
     }
 
-    async function getReply(userText, personaId = null, imageData = null, chatOverride = null, signal = null) {
+    async function getReply(userText, personaId = null, imageData = null, chatOverride = null, signal = null, onChunk = null) {
       const chat = chatOverride || activeChat();
       const persona = personas[personaId || chat.members[0]] || personas.danil;
       try {
-        return await requestAiReplyByProvider(userText, persona, chat, imageData, signal);
+        return await requestAiReplyByProvider(userText, persona, chat, imageData, signal, onChunk);
       } catch (error) {
         if (signal?.aborted || /запрос отменён/i.test(error.message || '')) throw error;
         logSafe('AI API Error', { code: error.name || 'api' });
@@ -3828,17 +3871,25 @@
         const targetChat = chats[chatId];
         if (!targetChat || aiRequestByChat.get(chatId)?.id !== request.id || request.controller.signal.aborted) return;
         let reply;
-        try { reply = await getReply(text, first, imageData, targetChat, request.controller.signal); }
+        let liveMsg = null;
+        const firstStale = () => aiRequestByChat.get(chatId)?.id !== request.id || request.controller.signal.aborted;
+        const onFirstChunk = partial => {
+          if (firstStale()) return;
+          if (!liveMsg) { setAiLoading(false, null, 'готовит ответ', chatId); liveMsg = createLiveAiMessage(chatId, first); }
+          liveMsg?.update(partial);
+        };
+        try { reply = await getReply(text, first, imageData, targetChat, request.controller.signal, onFirstChunk); }
         catch {
-          if (aiRequestByChat.get(chatId)?.id !== request.id || request.controller.signal.aborted) return;
+          liveMsg?.remove();
+          if (firstStale()) return;
           setAiLoading(false, null, 'готовит ответ', chatId); showToast('Не удалось получить ответ ИИ'); return;
         }
-        if (aiRequestByChat.get(chatId)?.id !== request.id || request.controller.signal.aborted) return;
+        if (firstStale()) { liveMsg?.remove(); return; }
           const second = targetChat.type === 'group' ? targetChat.members.find(id => id !== first) : null;
         if (!second) aiRequestByChat.delete(chatId);
         markOwnMessagesRead(chatId);
-        setAiLoading(false, null, 'готовит ответ', chatId);
-        addStreamingMessageToChat(chatId, reply, first);
+        if (liveMsg) { liveMsg.finalize(reply); }
+        else { setAiLoading(false, null, 'готовит ответ', chatId); addStreamingMessageToChat(chatId, reply, first); }
         scheduleVoiceMessage(chatId, first, text);
         if (chatId === activeChatId) status.textContent = targetChat.type === 'group' ? `${targetChat.members.length} ИИ-персонажа онлайн` : 'в сети';
         if (second) {
@@ -3851,13 +3902,20 @@
               setAiLoading(true, second, 'генерирует ответ', chatId); status.textContent = `${senderName(second)} генерирует ответ...`;
             }
             let botReply;
-            try { botReply = await getReply(`${senderName(first)} написал: ${reply}. Коротко отреагируй и добавь свое мнение.`, second, null, stillTargetChat, request.controller.signal); }
-            catch { if (!request.controller.signal.aborted) { setAiLoading(false, null, 'готовит ответ', chatId); showToast('Не удалось получить второй ответ ИИ'); } return; }
-            if (aiRequestByChat.get(chatId)?.id !== request.id || request.controller.signal.aborted) return;
+            let liveSecond = null;
+            const secondStale = () => aiRequestByChat.get(chatId)?.id !== request.id || request.controller.signal.aborted;
+            const onSecondChunk = partial => {
+              if (secondStale()) return;
+              if (!liveSecond) { setAiLoading(false, null, 'готовит ответ', chatId); liveSecond = createLiveAiMessage(chatId, second); }
+              liveSecond?.update(partial);
+            };
+            try { botReply = await getReply(`${senderName(first)} написал: ${reply}. Коротко отреагируй и добавь свое мнение.`, second, null, stillTargetChat, request.controller.signal, onSecondChunk); }
+            catch { liveSecond?.remove(); if (!request.controller.signal.aborted) { setAiLoading(false, null, 'готовит ответ', chatId); showToast('Не удалось получить второй ответ ИИ'); } return; }
+            if (secondStale()) { liveSecond?.remove(); return; }
             aiRequestByChat.delete(chatId);
             markOwnMessagesRead(chatId);
-            setAiLoading(false, null, 'готовит ответ', chatId);
-            addStreamingMessageToChat(chatId, botReply, second);
+            if (liveSecond) { liveSecond.finalize(botReply); }
+            else { setAiLoading(false, null, 'готовит ответ', chatId); addStreamingMessageToChat(chatId, botReply, second); }
             scheduleVoiceMessage(chatId, second, botReply);
             if (chatId === activeChatId) status.textContent = `${stillTargetChat.members.length} ИИ-персонажа онлайн`;
           }, 900 + Math.random() * 900);
@@ -4041,7 +4099,36 @@
       // URL isn't reliable across browsers for security reasons, so we register the real
       // file and simply no-op if it isn't present — the app still works without it, it's
       // just not installable/offline-capable in that case.
-      navigator.serviceWorker.register('./sw.js').catch(error => {
+      let swUpdateOffered = false;
+      const offerSwUpdate = worker => {
+        if (!worker || swUpdateOffered) return;
+        swUpdateOffered = true;
+        // Toasts are text-only here, so we can't render an inline button. Apply the update
+        // right away (postMessage -> skipWaiting) and reload once the new worker takes over;
+        // the toast tells the user why the page refreshes. This still avoids the old silent
+        // mid-session asset mixing, because the swap happens as one clean reload.
+        showToast('Доступно обновление — применяю…');
+        worker.postMessage({ type: 'SKIP_WAITING' });
+      };
+      let swReloading = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (swReloading) return;
+        swReloading = true;
+        location.reload();
+      });
+      navigator.serviceWorker.register('./sw.js').then(reg => {
+        if (!reg) return;
+        // A worker already waiting means an update was installed on a previous visit.
+        if (reg.waiting && navigator.serviceWorker.controller) offerSwUpdate(reg.waiting);
+        reg.addEventListener('updatefound', () => {
+          const installing = reg.installing;
+          if (!installing) return;
+          installing.addEventListener('statechange', () => {
+            // controller present => this is an update, not the very first install.
+            if (installing.state === 'installed' && navigator.serviceWorker.controller) offerSwUpdate(installing);
+          });
+        });
+      }).catch(error => {
         logSafe(`Service Worker registration skipped: ${error?.message || error}`);
       });
     }
