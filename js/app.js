@@ -41,6 +41,7 @@
     const toast = document.getElementById('toast');
     const searchInput = document.getElementById('searchInput');
     const homeTitle = document.getElementById('homeTitle');
+    const homeSubtitle = document.getElementById('homeSubtitle');
     const phone = document.querySelector('.phone');
     const chatTitle = document.getElementById('chatTitle');
     const replyBar = document.getElementById('replyBar');
@@ -805,7 +806,12 @@
       if (chatId === activeChatId) updateTypingForActiveChat();
     }
     
-    function haptic(pattern = 12) { try { navigator.vibrate?.(pattern); } catch {} }
+    function haptic(pattern = 12) {
+      // Bug fix: the "Вибрация" toggle in per-chat settings was saved but never read,
+      // so switching it off had no effect. Respect it here.
+      try { if (chatPersonalSettings(activeChatId).vibrate === false) return; } catch {}
+      try { navigator.vibrate?.(pattern); } catch {}
+    }
     function showToast(text) { toast.textContent = text; toast.classList.remove('open'); void toast.offsetWidth; toast.classList.add('open'); }
 
     // Clipboard API (`navigator.clipboard`) is only guaranteed in secure contexts (https/localhost).
@@ -862,10 +868,15 @@
     }
 
     function syncComposerState() {
-      const blocked = isAiBusy() || !navigator.onLine;
+      // Bug fix: the composer used to be fully disabled while offline, which made the
+      // offline queue in sendCurrentMessage unreachable dead code and contradicted the
+      // offline banner ("исходящие сообщения будут отправлены после восстановления").
+      // The app is a local messenger: 'local' and loaded 'neural' providers work fully
+      // offline, and Gemma messages are queued — so only block while the AI is busy.
+      const blocked = isAiBusy();
       if (messageInput) messageInput.disabled = blocked;
       if (sendBtn) sendBtn.disabled = blocked;
-      if (messageInput) messageInput.title = !navigator.onLine ? 'Нет сети — отправка временно недоступна' : isAiBusy() ? 'Дождитесь ответа ИИ' : '';
+      if (messageInput) messageInput.title = blocked ? 'Дождитесь ответа ИИ' : '';
       if (sendBtn) sendBtn.title = messageInput?.title || '';
       updateMessageCounter();
     }
@@ -998,7 +1009,9 @@
     }
     function t(key) { return I18N[currentLanguage()]?.[key] || I18N.ru[key] || key; }
     function messagePlaceholder(chat = activeChat()) {
-      if (!chat) return 'Сообщение';
+      // Bug fix: the placeholder was always Russian even with English/Ukrainian UI
+      // language selected; use the localized base word outside of Russian.
+      if (!chat || currentLanguage() !== 'ru') return t('message');
       return `Сообщение ${chat.type === 'group' ? 'в группу' : chatName(chat)}`;
     }
     function messageCountLabel(count) {
@@ -2476,13 +2489,15 @@
       const text = message.text || (message.attachment ? 'вложение' : message.image ? 'картинка' : message.kind === 'sticker' ? 'стикер' : message.kind === 'voice' ? 'голосовое сообщение' : 'новое сообщение');
       const notice = `Новое сообщение от ${senderName(message.who)} в ${chatName(chat)}: ${truncateText(text, 90)}`;
       newMessageAnnouncer.textContent = notice;
-      notifyIfBackground(notice);
+      notifyIfBackground(notice, chat.id);
     }
 
-    function notifyIfBackground(text) {
+    function notifyIfBackground(text, chatId = activeChatId) {
       if (!document.hidden || muted) return;
       if ('Notification' in window) {
-        if (Notification.permission === 'granted') new Notification('AI Messenger', { body: text });
+        // Bug fix: the per-chat "Звук уведомлений" toggle was saved but never used —
+        // it now mutes the system notification sound for that chat.
+        if (Notification.permission === 'granted') new Notification('AI Messenger', { body: text, silent: chatPersonalSettings(chatId).sound === false });
         else if (Notification.permission === 'default') Notification.requestPermission().catch(() => {});
       }
       document.title = '● ' + document.title.replace(/^●\s*/, '');
@@ -2871,19 +2886,29 @@
     }
 
     async function fetchWithTimeout(url, options = {}, timeoutMs = API_TIMEOUT_MS) {
-      const controller = options.signal ? null : new AbortController();
-      const signal = options.signal || controller.signal;
-      if (controller) currentAbortController = controller;
-      const timeoutId = appSetTimeout(() => controller?.abort?.(), timeoutMs);
+      // Bug fix: when an external signal was passed (every chat AI request does this),
+      // the internal controller was null and the timeout callback aborted nothing —
+      // so those requests had NO timeout at all and could hang forever. Now we always
+      // use an internal controller, forward external aborts to it, and time out both.
+      const controller = new AbortController();
+      const external = options.signal || null;
+      if (external) {
+        if (external.aborted) controller.abort();
+        else external.addEventListener('abort', () => controller.abort(), { once: true });
+      } else {
+        currentAbortController = controller;
+      }
+      let timedOut = false;
+      const timeoutId = appSetTimeout(() => { timedOut = true; controller.abort(); }, timeoutMs);
       try {
-        return await fetch(url, { ...options, signal });
+        return await fetch(url, { ...options, signal: controller.signal });
       } catch (error) {
-        if (error.name === 'AbortError') throw new Error('запрос отменён');
+        if (error.name === 'AbortError') throw new Error(timedOut ? 'превышено время ожидания API' : 'запрос отменён');
         if (!navigator.onLine) throw new Error('нет подключения к интернету');
         throw new Error(error.message || 'сетевая ошибка API');
       } finally {
         appClearTimeout(timeoutId);
-        if (controller && currentAbortController === controller) currentAbortController = null;
+        if (!external && currentAbortController === controller) currentAbortController = null;
       }
     }
 
@@ -2894,6 +2919,9 @@
         let res;
         try { res = await fetchWithTimeout(url, options); }
         catch (error) {
+          // Bug fix: a user-cancelled request (chat switched, message deleted) used to be
+          // retried with the same already-aborted signal, burning retry delays for nothing.
+          if (/запрос отменён/i.test(error?.message || '')) throw error;
           lastError = error;
           if (attempt >= retries) break;
           const retryAfter = 450 * (2 ** attempt) + Math.random() * 180;
@@ -2971,9 +2999,16 @@
         const data = await res.json().catch(() => null);
         raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
       }
-      const answer = cleanAiReply(raw, persona) || getLocalReply(userText, persona, chat);
-      setAiCacheValue(cacheKey, answer);
-      return answer;
+      // Bug fix: when the API returned an empty/filtered answer, the local fallback
+      // phrase used to be written into the AI cache under the API cache key — every
+      // later identical prompt then got the same canned line back "from the API".
+      // Only cache genuine model output.
+      const cleaned = cleanAiReply(raw, persona);
+      if (cleaned) {
+        setAiCacheValue(cacheKey, cleaned);
+        return cleaned;
+      }
+      return getLocalReply(userText, persona, chat);
     }
 
     function pickLocalReply(pool, intent = 'default', seed = '', avoidTexts = []) {
@@ -3478,6 +3513,14 @@
 
     function showAttachmentPreview(file) {
       if (!file) return clearAttachmentPreview();
+      // Bug fix: there was no size limit at all — a large video became a base64 data-URL
+      // in memory and then a huge IndexedDB/localStorage write, freezing the tab or
+      // failing silently. Cap it before reading.
+      if (file.size > 25 * 1024 * 1024) {
+        clearAttachmentPreview();
+        showToast('Файл больше 25 МБ — выбери файл поменьше');
+        return;
+      }
       clearAttachmentPreview();
       pendingAttachmentFile = file;
       const title = document.createElement('div');
@@ -3537,6 +3580,10 @@
           clearReply();
           clearAttachmentPreview();
           messageInput.value = '';
+          // Bug fix: the caption used to stay in the session draft and in the character
+          // counter after sending an attachment, reappearing on the next chat switch.
+          clearDraft(activeChatId);
+          updateMessageCounter();
         } catch (error) {
           showToast('Не удалось отправить вложение: ' + error.message);
         }
@@ -3703,7 +3750,13 @@
       if (action === 'left' && !tetrisCollides(tetrisState.piece, -1, 0)) tetrisState.piece.x -= 1;
       if (action === 'right' && !tetrisCollides(tetrisState.piece, 1, 0)) tetrisState.piece.x += 1;
       if (action === 'down') tetrisStep();
-      if (action === 'drop') while (!tetrisCollides(tetrisState.piece, 0, 1)) tetrisState.piece.y += 1;
+      if (action === 'drop') {
+        while (!tetrisCollides(tetrisState.piece, 0, 1)) tetrisState.piece.y += 1;
+        // Bug fix: after a hard drop the piece used to hang at the bottom until the next
+        // 520ms gravity tick, letting the player slide it sideways after "dropping" it.
+        // Lock it immediately, as a hard drop should.
+        tetrisStep();
+      }
       if (action === 'rotate') {
         const rotated = tetrisState.piece.matrix[0].map((_, index) => tetrisState.piece.matrix.map(row => row[index]).reverse());
         if (!tetrisCollides(tetrisState.piece, 0, 0, rotated)) tetrisState.piece.matrix = rotated;
@@ -3753,12 +3806,14 @@
       const launchTetris = shouldLaunchTetris(text);
       clearReply(); messageInput.value = ''; clearDraft(activeChatId); updateMessageCounter(); messageInput.focus({ preventScroll: true });
       if (launchTetris) { startTetrisEaster(); return; }
-      if (!navigator.onLine) { offlineQueue.push({ chatId: activeChatId, text }); showToast('Нет сети: сообщение поставлено в очередь'); syncComposerState(); return; }
+      // Bug fix: everything used to be queued offline, although only the Gemma provider
+      // actually needs the network — local phrases and a loaded in-browser model answer
+      // fine without a connection.
+      if (!navigator.onLine && aiProvider === 'gemma') { offlineQueue.push({ chatId: activeChatId, text }); showToast('Нет сети: ответ ИИ придёт после восстановления связи'); return; }
       scheduleAiReplies(text);
     }
 
-    function scheduleAiReplies(text, imageData = null) {
-      const chatId = activeChatId;
+    function scheduleAiReplies(text, imageData = null, chatId = activeChatId) {
       cancelAiForChat(chatId);
       const chat = chats[chatId];
       if (!chat) return;
@@ -3971,8 +4026,12 @@
     }
 
     function normalizeHandleInput(value, fallback = '') {
+      // Bug fix: JS validation only checked the leading '@' while the registration
+      // input's HTML pattern requires @ + 2-27 word characters — the profile-editing
+      // panel (which has no pattern attribute) accepted handles like "@a" or "@a b"
+      // that registration would reject. Use one rule everywhere.
       const handle = safeText(value, fallback, 28).trim();
-      return handle && handle.startsWith('@') ? handle : '';
+      return /^@[\w\u0400-\u04FF]{2,27}$/.test(handle) ? handle : '';
     }
 
     function registerServiceWorker() {
@@ -4612,10 +4671,10 @@
       if (!name) { showToast('Имя не может быть пустым'); registrationNameInput.focus(); return; }
       const handle = normalizeHandleInput(registrationHandleInput.value);
       if (!handle) {
-        registrationHandleInput.setCustomValidity('Ник должен начинаться с @');
+        registrationHandleInput.setCustomValidity('Ник: начинается с @, минимум 2 символа (буквы, цифры, _)');
         registrationHandleInput.reportValidity();
         registrationHandleInput.focus();
-        showToast('Ник должен начинаться с @');
+        showToast('Ник: начинается с @, минимум 2 символа (буквы, цифры, _)');
         return;
       }
       registrationHandleInput.setCustomValidity('');
@@ -4728,7 +4787,7 @@
       const name = safeText(userNameInput.value, '', 22);
       if (!name) { showToast('Имя не может быть пустым'); return; }
       const handle = normalizeHandleInput(userHandleInput.value);
-      if (!handle) { showToast('Ник должен начинаться с @'); userHandleInput.focus(); return; }
+      if (!handle) { showToast('Ник: начинается с @, минимум 2 символа (буквы, цифры, _)'); userHandleInput.focus(); return; }
       writeJson('messengerUserProfile', { name, handle, createdAt: loadUserProfile()?.createdAt || Date.now() });
       closeOverlay(); applyUserProfile(); showToast('Профиль сохранён');
     });
@@ -4759,14 +4818,16 @@
       saveChatScroll(activeChatId);
       const snapshot = compactChatsForLocalStorage(loadChatsFromObject(chats));
       writeJson('aiPersonaChats', snapshot);
-      try {
-        const payload = JSON.stringify({ app: 'ai-messenger', version: 2, savedAt: Date.now(), chats: snapshot });
-        navigator.sendBeacon?.(location.href, new Blob([payload], { type: 'application/json' }));
-      } catch {}
+      // Bug fix (privacy): a sendBeacon() here used to POST the user's entire chat history
+      // to whatever server hosts the page on every unload. No backend consumes it — the app
+      // is fully local — so this was a pure private-data leak. Removed.
       clearAppTimers();
     });
     window.addEventListener('offline', () => { phone.classList.add('offline'); syncComposerState(); });
-    window.addEventListener('online', () => { phone.classList.remove('offline'); while (offlineQueue.length) { const item = offlineQueue.shift(); if (item?.chatId === activeChatId) scheduleAiReplies(item.text); } syncComposerState(); });
+    // Bug fix: queued items for chats other than the active one used to be shift()ed and
+    // silently discarded on reconnect. Now every queued message gets its AI reply in its
+    // own chat (one reply per chat: scheduleAiReplies cancels the previous request).
+    window.addEventListener('online', () => { phone.classList.remove('offline'); while (offlineQueue.length) { const item = offlineQueue.shift(); if (item?.chatId && chats[item.chatId]) scheduleAiReplies(item.text, null, item.chatId); } syncComposerState(); });
     window.addEventListener('resize', () => {
       const emptyChat = chatScreen.classList.contains('hidden') || phone.classList.contains('chat-empty');
       syncResponsiveLayout({ emptyChat });
@@ -4883,6 +4944,9 @@
     }
 
     async function initApp() {
+      // Bug fix: the offline banner only reacted to online/offline *events*, so a page
+      // opened while already offline never showed it. Sync the initial state too.
+      phone.classList.toggle('offline', !navigator.onLine);
       renderInitialShell();
       await new Promise(resolve => requestAnimationFrame(resolve));
       await hydrateInitialData();

@@ -13,7 +13,7 @@
 // Версию кеша (CACHE_NAME) стоит менять при каждом заметном обновлении html-файла,
 // чтобы у пользователей подтянулась свежая версия оболочки.
 
-const CACHE_NAME = 'ai-messenger-shell-v2';
+const CACHE_NAME = 'ai-messenger-shell-v3';
 const APP_SHELL = [
   './',
   './index.html',
@@ -58,7 +58,12 @@ self.addEventListener('fetch', event => {
           }
           return response;
         })
-        .catch(() => cached);
+        // Bug fix: when the network failed AND the request wasn't cached, this used to
+        // resolve respondWith() with `undefined`, which throws a TypeError and breaks
+        // the request entirely. Fall back to the cached shell for navigations and to a
+        // proper network-error response for everything else.
+        .catch(() => cached || (req.mode === 'navigate' ? caches.match('./index.html') : undefined))
+        .then(response => response || Response.error());
       // Отдаём кеш сразу, если он есть (быстрый офлайн-старт), и обновляем его в фоне.
       return cached || networkFetch;
     })

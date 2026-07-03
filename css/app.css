@@ -904,6 +904,9 @@
     .tile-context-menu .menu-item.active { color: var(--accent); }
 
     .tile-pin-list { display: grid; gap: 8px; margin-top: 4px; max-height: 300px; overflow-y: auto; }
+    /* Bug fix: this spacing lived in an inline style="" attribute in index.html, which the
+       page's own CSP (style-src 'self') silently blocked — it never applied. */
+    .tile-pin-note { margin-top: -4px; margin-bottom: 8px; }
     .tile-pin-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,0.04); color: var(--text); text-align: left; }
     .tile-pin-row.pinned { border-color: var(--accent); background: var(--accent-soft); }
     .tile-pin-icon { width: 30px; height: 30px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 50%; background: var(--panel-light); font-size: 15px; }
