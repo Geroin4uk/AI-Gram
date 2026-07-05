@@ -797,6 +797,8 @@
       // Анимация фаз генерации ИИ (анализирует/формирует/генерирует)
       if (loading && personaId && chatId === activeChatId) startAiPhases();
       else if (!aiLoadingByChat.has(activeChatId)) stopAiPhases();
+      // Живой статус «печатает…» в списке чатов
+      renderChatList();
     }
 
     function cancelAiForChat(chatId = activeChatId) {
@@ -1029,7 +1031,7 @@
       const lang = currentLanguage();
       document.documentElement.lang = lang;
       if (messageInput) messageInput.placeholder = activeChat() ? messagePlaceholder() : 'Сообщение';
-      if (homeTitle) homeTitle.textContent = 'Фейк Telegram';
+      if (homeTitle) homeTitle.textContent = 'AI-Gram';
       const offline = document.getElementById('offlineIndicator');
       if (offline) offline.textContent = t('offline');
     }
@@ -1629,9 +1631,14 @@
       row.classList.toggle('active', chat.id === activeChatId);
       row.type = 'button';
       row.dataset.chatId = chat.id;
+      // Если в этом чате прямо сейчас генерируется ответ — показываем живой статус вместо превью
+      const typingState = aiLoadingByChat.get(chat.id);
+      const previewHtml = typingState
+        ? `<span class="last-typing">${escapeHtml(senderName(typingState.personaId))} печатает<span class="typing-dots mini"><span></span><span></span><span></span></span></span>`
+        : escapeHtml(last ? previewText(last, chat) : 'Пустой чат');
       row.innerHTML = `<div class="avatar ${chatCss(chat)}">${escapeHtml(chatAvatar(chat))}</div>
-        <div class="preview"><div class="name">${escapeHtml(name)}</div><div class="last">${escapeHtml(last ? previewText(last, chat) : 'Пустой чат')}</div></div>
-        <div class="meta"><div>${last?.time || now()}</div><div class="badge">${chat.unread || ''}</div></div>`;
+        <div class="preview"><div class="name">${escapeHtml(name)}</div><div class="last">${previewHtml}</div></div>
+        <div class="meta"><div class="row-time">${last?.time || now()}</div><div class="badge">${chat.unread || ''}</div></div>`;
       return row;
     }
 
@@ -2352,6 +2359,13 @@
     function openChat(id) {
       if (!chats[id]) return;
       closeMessageContextMenu();
+      // Мягкая анимация переключения между чатами
+      if (activeChatId !== id) {
+        messages.classList.remove('switching');
+        void messages.offsetWidth; // перезапуск анимации
+        messages.classList.add('switching');
+        setTimeout(() => messages.classList.remove('switching'), 300);
+      }
       // Only save draft for *previous* chat; skip when restoring the same chat on startup
       // to avoid overwriting a session-persisted draft with an empty input.
       if (activeChatId !== id) {
@@ -5641,7 +5655,7 @@
       { id: 'app:p2p', icon: '🔗', label: 'P2P-чат', hint: 'связь с человеком' }
     );
     // Штамп сборки — чтобы сразу видеть, что загружена свежая версия (а не старый кеш).
-    const AIGRAM_BUILD = 'ui-premium-5';
+    const AIGRAM_BUILD = 'identity-6';
     try {
       console.log('%cAI-Gram build: ' + AIGRAM_BUILD, 'color:#2aabee;font-weight:bold');
       const stampHost = document.querySelector('#uiPanel .settings-shortcuts');
