@@ -1,19 +1,16 @@
-// Service Worker для AI Messenger.
-// Должен лежать РЯДОМ с html-файлом приложения (тот же путь, что и './sw.js' в registerServiceWorker()).
+// Service Worker для AI-Gram.
+// Должен лежать РЯДОМ с index.html (тот же путь, что и './sw.js' в registerServiceWorker()).
 //
-// Что делает:
-//  - Кеширует саму страницу (App Shell), чтобы приложение открывалось офлайн.
-//  - Использует стратегию "сначала кеш, обновление в фоне" только для запросов на
-//    ТОТ ЖЕ домен, что и сама страница.
-//  - НИКОГДА не трогает кросс-доменные запросы (Gemini API, Hugging Face / hf.co
-//    веса моделей, esm.run, cdn.jsdelivr.net) — они идут напрямую в сеть, как обычно.
-//    Это важно: перехват огромных бинарных файлов модели через Cache Storage может
-//    сломать их загрузку или раздуть кеш на сотни МБ и гигабайты без необходимости.
-//
-// Версию кеша (CACHE_NAME) стоит менять при каждом заметном обновлении html-файла,
-// чтобы у пользователей подтянулась свежая версия оболочки.
+// Стратегия: NETWORK-FIRST для оболочки приложения на своём домене.
+//  - Когда есть сеть, всегда берём свежие index.html/app.js/app.css и т.д. — поэтому
+//    новые сборки применяются сразу, без «застревания» на старом кеше.
+//  - Кеш используется только как офлайн-фолбэк.
+//  - Кросс-доменные запросы (Gemini API, Hugging Face / hf.co веса моделей, esm.run,
+//    cdn.jsdelivr.net) НИКОГДА не перехватываются — идут напрямую в сеть.
+//  - Новый воркер активируется немедленно (skipWaiting + clients.claim), страница
+//    один раз перезагружается при смене контроллера (см. registerServiceWorker в app.js).
 
-const CACHE_NAME = 'ai-messenger-shell-v5';
+const CACHE_NAME = 'ai-gram-shell-v6';
 const APP_SHELL = [
   './',
   './index.html',
@@ -27,54 +24,49 @@ const APP_SHELL = [
 ];
 
 self.addEventListener('install', event => {
-  // Do NOT skipWaiting() automatically: activating a new worker mid-session can serve a
-  // mix of old and new shell assets (e.g. fresh app.js against a cached index.html).
-  // Instead the new worker waits; the page shows an "update ready" toast and applies it
-  // on the user's terms (message below) or on the next full open.
+  self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(APP_SHELL).catch(() => {}))
+    caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL).catch(() => {}))
   );
+});
+
+self.addEventListener('activate', event => {
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key)));
+    await self.clients.claim();
+  })());
 });
 
 self.addEventListener('message', event => {
   if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
-self.addEventListener('activate', event => {
-  event.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))))
-      .then(() => self.clients.claim())
-  );
-});
-
 self.addEventListener('fetch', event => {
-  const req = event.request;
-  if (req.method !== 'GET') return;
-
-  const url = new URL(req.url);
-  // Только свой домен: не кешируем и не перехватываем сторонние API/CDN/модели.
+  const request = event.request;
+  if (request.method !== 'GET') return;
+  const url = new URL(request.url);
+  // Трогаем только свой домен; всё кросс-доменное (API, модели, CDN) не перехватываем.
   if (url.origin !== self.location.origin) return;
 
-  event.respondWith(
-    caches.match(req).then(cached => {
-      const networkFetch = fetch(req)
-        .then(response => {
-          if (response && response.ok) {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(req, copy)).catch(() => {});
-          }
-          return response;
-        })
-        // Bug fix: when the network failed AND the request wasn't cached, this used to
-        // resolve respondWith() with `undefined`, which throws a TypeError and breaks
-        // the request entirely. Fall back to the cached shell for navigations and to a
-        // proper network-error response for everything else.
-        .catch(() => cached || (req.mode === 'navigate' ? caches.match('./index.html') : undefined))
-        .then(response => response || Response.error());
-      // Отдаём кеш сразу, если он есть (быстрый офлайн-старт), и обновляем его в фоне.
-      return cached || networkFetch;
-    })
-  );
+  event.respondWith((async () => {
+    try {
+      // Network-first: всегда пытаемся получить свежую версию.
+      const fresh = await fetch(request);
+      if (fresh && fresh.ok && fresh.type === 'basic') {
+        const cache = await caches.open(CACHE_NAME);
+        cache.put(request, fresh.clone()).catch(() => {});
+      }
+      return fresh;
+    } catch (error) {
+      // Офлайн — отдаём из кеша, для навигаций фолбэк на index.html.
+      const cached = await caches.match(request);
+      if (cached) return cached;
+      if (request.mode === 'navigate') {
+        const shell = await caches.match('./index.html');
+        if (shell) return shell;
+      }
+      throw error;
+    }
+  })());
 });

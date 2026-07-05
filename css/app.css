@@ -942,3 +942,5 @@
     .tile-metric { font-size: 13px; font-weight: 700; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; }
     .tile-size-small .tile-metric { font-size: 11px; }
     /* =================== /Plugins / P2P / Live tile metrics =================== */
+
+    .build-stamp { opacity: 0.5; font-size: 11px; margin: 2px 0 8px; }

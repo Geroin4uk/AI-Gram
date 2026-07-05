@@ -3029,7 +3029,7 @@
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: buildSystemPrompt(persona, chat) }] },
           contents,
-          generationConfig: { temperature: persona.id === 'yarik' ? 0.72 : 0.68, topP: 0.9, topK: 40, maxOutputTokens: 512, presencePenalty: 0.35, frequencyPenalty: 0.45 }
+          generationConfig: { temperature: persona.id === 'yarik' ? 0.72 : 0.68, topP: 0.9, topK: 40, maxOutputTokens: 512 }
         })
       });
       if (!res.ok) {
@@ -4157,17 +4157,6 @@
       // URL isn't reliable across browsers for security reasons, so we register the real
       // file and simply no-op if it isn't present — the app still works without it, it's
       // just not installable/offline-capable in that case.
-      let swUpdateOffered = false;
-      const offerSwUpdate = worker => {
-        if (!worker || swUpdateOffered) return;
-        swUpdateOffered = true;
-        // Toasts are text-only here, so we can't render an inline button. Apply the update
-        // right away (postMessage -> skipWaiting) and reload once the new worker takes over;
-        // the toast tells the user why the page refreshes. This still avoids the old silent
-        // mid-session asset mixing, because the swap happens as one clean reload.
-        showToast('Доступно обновление — применяю…');
-        worker.postMessage({ type: 'SKIP_WAITING' });
-      };
       let swReloading = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (swReloading) return;
@@ -4176,16 +4165,8 @@
       });
       navigator.serviceWorker.register('./sw.js').then(reg => {
         if (!reg) return;
-        // A worker already waiting means an update was installed on a previous visit.
-        if (reg.waiting && navigator.serviceWorker.controller) offerSwUpdate(reg.waiting);
-        reg.addEventListener('updatefound', () => {
-          const installing = reg.installing;
-          if (!installing) return;
-          installing.addEventListener('statechange', () => {
-            // controller present => this is an update, not the very first install.
-            if (installing.state === 'installed' && navigator.serviceWorker.controller) offerSwUpdate(installing);
-          });
-        });
+        // Периодически проверяем обновления, чтобы свежая сборка подхватывалась без ручного сброса.
+        setInterval(() => { reg.update().catch(() => {}); }, 60000);
       }).catch(error => {
         logSafe(`Service Worker registration skipped: ${error?.message || error}`);
       });
@@ -5636,12 +5617,25 @@
     // Регистрация новых панелей и плиток
     panelMap.plugin = document.getElementById('pluginPanel');
     panelMap.p2p = document.getElementById('p2pPanel');
+    bindTap(document.getElementById('openP2pBtn'), () => openPanel('p2p'));
     APP_TILES.push(
       { id: 'app:stats', icon: '📊', label: 'Статистика', hint: 'активность чатов' },
       { id: 'app:monitor', icon: '🩺', label: 'Монитор', hint: 'скорость и память' },
       { id: 'app:plugins', icon: '🧩', label: 'Плагины', hint: 'свои боты' },
       { id: 'app:p2p', icon: '🔗', label: 'P2P-чат', hint: 'связь с человеком' }
     );
+    // Штамп сборки — чтобы сразу видеть, что загружена свежая версия (а не старый кеш).
+    const AIGRAM_BUILD = 'features-2';
+    try {
+      console.log('%cAI-Gram build: ' + AIGRAM_BUILD, 'color:#2aabee;font-weight:bold');
+      const stampHost = document.querySelector('#uiPanel .settings-shortcuts');
+      if (stampHost && stampHost.parentNode) {
+        const stamp = document.createElement('div');
+        stamp.className = 'panel-subtitle build-stamp';
+        stamp.textContent = `AI-Gram · сборка ${AIGRAM_BUILD}`;
+        stampHost.parentNode.insertBefore(stamp, stampHost);
+      }
+    } catch {}
 
 
     function renderInitialShell() {
