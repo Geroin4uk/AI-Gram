@@ -284,8 +284,8 @@
 
     .settings-group { margin-top: 14px; padding: 12px; border: 1px solid var(--line); border-radius: 16px; background: rgba(255,255,255,0.035); color: var(--text); }
     .settings-group-title { margin-bottom: 10px; color: var(--muted); font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
-    .theme-panel, .custom-panel, .user-profile-panel, .api-panel, .persona-panel, .ui-panel { color: var(--text); }
-    .theme-panel *, .custom-panel *, .user-profile-panel *, .api-panel *, .persona-panel *, .ui-panel * { color: inherit; }
+    .profile-card, .theme-panel, .custom-panel, .user-profile-panel, .api-panel, .persona-panel, .ui-panel { color: var(--text); }
+    .profile-card *, .theme-panel *, .custom-panel *, .user-profile-panel *, .api-panel *, .persona-panel *, .ui-panel * { color: inherit; }
     .theme-panel .panel-subtitle, .custom-panel .panel-subtitle, .user-profile-panel .panel-subtitle, .api-panel .panel-subtitle, .persona-panel .panel-subtitle, .ui-panel .panel-subtitle,
     .settings-card span, .settings-group-title, .toggle-row, .custom-label, .color-control, .guide-step p { color: var(--muted); }
     .custom-select option, .emoji-picker option { color: #111827; }
@@ -1158,3 +1158,14 @@
     .control-icon .ic { width: 24px; height: 24px; }
     .call-control { transition: transform 0.18s var(--ease-spring), background 0.2s ease; }
     .call-control:active { transform: scale(0.92); }
+
+    /* Menu items с SVG-иконкой вместо эмодзи */
+    .menu-popover .menu-item { display: flex; align-items: center; gap: 12px; }
+    .menu-popover .menu-item .mi-ic { width: 18px; height: 18px; flex: none; color: var(--muted); }
+    .menu-popover .menu-item.danger .mi-ic { color: var(--danger); }
+    .menu-popover .menu-item:hover .mi-ic { color: var(--accent); }
+    .menu-popover .menu-item.danger:hover .mi-ic { color: var(--danger); }
+    .menu-popover .menu-item span { flex: 1; min-width: 0; }
+    /* Профиль: тёмная стеклянная карточка, читаемый текст */
+    .profile-card .name { color: var(--text); }
+    .profile-card .profile-row { color: var(--muted); }

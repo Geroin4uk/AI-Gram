@@ -3994,7 +3994,11 @@
       messageContextMenu.dataset.chatId = chat.id;
       messageContextMenu.style.visibility = 'hidden';
       messageContextMenu.classList.add('open');
-      const phoneRect = phone.getBoundingClientRect();
+      // Меню позиционируется absolute внутри своего offsetParent. В desktop-split это
+      // #chatScreen (position: relative), а не .phone, поэтому считать координаты нужно
+      // относительно реального контейнера — иначе на широких экранах меню улетает вправо.
+      const container = messageContextMenu.offsetParent || phone;
+      const phoneRect = container.getBoundingClientRect();
       const messageRect = messageNode.getBoundingClientRect();
       const menuRect = messageContextMenu.getBoundingClientRect();
       const menuWidth = Math.min(menuRect.width || 190, Math.max(160, phoneRect.width - 20));
@@ -5628,7 +5632,7 @@
       { id: 'app:p2p', icon: '🔗', label: 'P2P-чат', hint: 'связь с человеком' }
     );
     // Штамп сборки — чтобы сразу видеть, что загружена свежая версия (а не старый кеш).
-    const AIGRAM_BUILD = 'ui-premium-3';
+    const AIGRAM_BUILD = 'ui-premium-4';
     try {
       console.log('%cAI-Gram build: ' + AIGRAM_BUILD, 'color:#2aabee;font-weight:bold');
       const stampHost = document.querySelector('#uiPanel .settings-shortcuts');
