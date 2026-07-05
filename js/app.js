@@ -1233,7 +1233,10 @@
       menu.classList.add('anchor-popover');
       menu.style.visibility = 'hidden';
       menu.classList.add('open');
-      const phoneRect = phone.getBoundingClientRect();
+      // Позиционируем относительно реального offsetParent меню (в desktop-split это может
+      // быть не .phone), иначе на широких экранах popover уезжает в сторону.
+      const container = menu.offsetParent || phone;
+      const phoneRect = container.getBoundingClientRect();
       const buttonRect = button.getBoundingClientRect();
       const menuWidth = menu.offsetWidth || 240;
       const menuHeight = menu.offsetHeight || 220;
@@ -2751,8 +2754,14 @@
     }
 
     function updateChatMenuLabels() {
-      if (chatAutoMenuItem) chatAutoMenuItem.textContent = autoChatRunning ? '⏹ Остановить авто-диалог' : '⏱ Включить авто-диалог';
-      if (pinTileMenuItem) pinTileMenuItem.textContent = isTilePinned(activeChatId) ? '📌 Открепить плитку' : '📌 Закрепить как плитку';
+      if (chatAutoMenuItem) {
+        const span = chatAutoMenuItem.querySelector('span');
+        if (span) span.textContent = autoChatRunning ? 'Остановить авто-диалог' : 'Включить авто-диалог';
+      }
+      if (pinTileMenuItem) {
+        const span = pinTileMenuItem.querySelector('span');
+        if (span) span.textContent = isTilePinned(activeChatId) ? 'Открепить плитку' : 'Закрепить как плитку';
+      }
       updateAutoChatControls();
     }
 
@@ -5632,7 +5641,7 @@
       { id: 'app:p2p', icon: '🔗', label: 'P2P-чат', hint: 'связь с человеком' }
     );
     // Штамп сборки — чтобы сразу видеть, что загружена свежая версия (а не старый кеш).
-    const AIGRAM_BUILD = 'ui-premium-4';
+    const AIGRAM_BUILD = 'ui-premium-5';
     try {
       console.log('%cAI-Gram build: ' + AIGRAM_BUILD, 'color:#2aabee;font-weight:bold');
       const stampHost = document.querySelector('#uiPanel .settings-shortcuts');
