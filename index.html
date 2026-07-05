@@ -29,22 +29,26 @@
 
     <section class="screen" id="homeScreen" aria-label="Список чатов">
       <header class="topbar">
-        <button class="icon-btn" id="burgerBtn" type="button" aria-label="Меню">☰</button>
+        <button class="icon-btn" id="burgerBtn" type="button" aria-label="Меню"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
         <div class="title">
           <strong id="homeTitle">Фейк Telegram</strong>
           <div class="subtitle" id="homeSubtitle">3 чата • ИИ-персонажи и группа</div>
         </div>
-        <button class="icon-btn" id="newChatBtn" type="button" aria-label="Открыть ИИ-комнату">👥</button>
+        <button class="icon-btn" id="newChatBtn" type="button" aria-label="Открыть ИИ-комнату"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></button>
       </header>
 
       <div class="chat-list">
-        <div class="search-bar">
-          <input id="searchInput" type="search" placeholder="Поиск" autocomplete="off" />
-        </div>
+        <div class="search-bar"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input id="searchInput" type="search" placeholder="Поиск" autocomplete="off" /></div>
         <div class="chat-actions">
-          <button class="mini-action" id="openPersonaBtn" type="button">Свой персонаж</button>
-          <button class="mini-action" id="autoChatBtn" type="button">Авто-диалог</button>
-          <button class="mini-action" id="openP2pBtn" type="button">P2P-чат</button>
+          <button class="mini-action create-btn" id="createBtn" type="button" aria-haspopup="true" aria-expanded="false"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span>Создать</span></button>
+          <button class="mini-action" id="openPersonaBtn" type="button" hidden>Свой персонаж</button>
+          <button class="mini-action" id="autoChatBtn" type="button" hidden>Авто-диалог</button>
+          <button class="mini-action" id="openP2pBtn" type="button" hidden>P2P-чат</button>
+          <nav class="create-menu" id="createMenu" aria-label="Создать">
+            <button class="menu-item" type="button" data-create="openPersonaBtn"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M20 8v6M23 11h-6"/></svg><span>Свой персонаж</span></button>
+            <button class="menu-item" type="button" data-create="autoChatBtn"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg><span>Авто-диалог</span></button>
+            <button class="menu-item" type="button" data-create="openP2pBtn"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><span>P2P-чат</span></button>
+          </nav>
         </div>
         <div class="chat-list-inner" id="chatListInner"></div>
       </div>
@@ -54,15 +58,15 @@
 
     <section class="screen chat-screen hidden" id="chatScreen" aria-label="Чат">
       <header class="topbar">
-        <button class="icon-btn back-icon" id="backBtn" type="button" aria-label="Назад">‹</button>
+        <button class="icon-btn back-icon" id="backBtn" type="button" aria-label="Назад"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg></button>
         <button class="avatar" id="avatarBtn" type="button" aria-label="Профиль"></button>
         <div class="title">
           <strong id="chatTitle">Выберите чат</strong>
           <div class="status" id="status">был в сети только что</div>
         </div>
-        <button class="icon-btn" id="callBtn" type="button" aria-label="Позвонить">☎</button>
-        <button class="icon-btn" id="videoCallBtn" type="button" aria-label="Видеозвонок">📹</button>
-        <button class="icon-btn" id="menuBtn" type="button" aria-label="Ещё">⋯</button>
+        <button class="icon-btn" id="callBtn" type="button" aria-label="Позвонить"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg></button>
+        <button class="icon-btn" id="videoCallBtn" type="button" aria-label="Видеозвонок"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2" ry="2"/></svg></button>
+        <button class="icon-btn" id="menuBtn" type="button" aria-label="Ещё"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></button>
       </header>
 
       <section class="messages" id="messages">
@@ -109,14 +113,14 @@
           <button class="mini-action" id="clearAttachmentBtn" type="button">Убрать</button>
         </div>
         <form class="composer" id="form">
-          <button class="icon-btn" id="attachBtn" type="button" aria-label="Вложение">＋</button>
-          <button class="icon-btn" id="stickerBtn" type="button" aria-label="Стикеры">😵</button>
+          <button class="icon-btn" id="attachBtn" type="button" aria-label="Вложение"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+          <button class="icon-btn" id="stickerBtn" type="button" aria-label="Стикеры"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></button>
           <input id="imageInput" type="file" accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip" hidden />
           <div class="composer-field">
             <input id="messageInput" autocomplete="off" inputmode="text" enterkeyhint="send" placeholder="Сообщение" maxlength="280" aria-describedby="messageCounter" />
             <span class="char-counter" id="messageCounter" aria-live="polite">0/280</span>
           </div>
-          <button class="send-btn" id="sendBtn" type="submit" aria-label="Отправить">➤</button>
+          <button class="send-btn" id="sendBtn" type="submit" aria-label="Отправить"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
         </form>
       </div>
     </section>
@@ -584,10 +588,10 @@
         <input class="call-input" id="callTextInput" placeholder="Или напиши фразу для звонка" autocomplete="off" />
       </div>
       <div class="call-controls" id="callControls">
-        <button class="call-control" id="callMicBtn" type="button" aria-label="Говорить"><span class="control-icon" aria-hidden="true">🎙</span><span>говорить</span></button>
-        <button class="call-control" id="callSendBtn" type="button" aria-label="Сказать"><span class="control-icon" aria-hidden="true">➤</span><span>сказать</span></button>
-        <button class="call-control" id="callVideoBtn" type="button" aria-label="Видео"><span class="control-icon" aria-hidden="true">📹</span><span>видео</span></button>
-        <button class="call-control danger" id="callEndBtn" type="button" aria-label="Сбросить звонок"><span class="control-icon" aria-hidden="true">✕</span><span>сброс</span></button>
+        <button class="call-control" id="callMicBtn" type="button" aria-label="Говорить"><span class="control-icon" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></span><span>говорить</span></button>
+        <button class="call-control" id="callSendBtn" type="button" aria-label="Сказать"><span class="control-icon" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></span><span>сказать</span></button>
+        <button class="call-control" id="callVideoBtn" type="button" aria-label="Видео"><span class="control-icon" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2" ry="2"/></svg></span><span>видео</span></button>
+        <button class="call-control danger" id="callEndBtn" type="button" aria-label="Сбросить звонок"><span class="control-icon" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/><line x1="23" y1="1" x2="1" y2="23"/></svg></span><span>сброс</span></button>
       </div>
     </section>
 

@@ -794,6 +794,9 @@
       updateTypingForActiveChat();
       if (chatId === activeChatId) syncComposerState();
       if (!chatScreen.classList.contains('hidden') && loading && personaId && chatId === activeChatId) status.textContent = `${senderName(personaId)} ${label}...`;
+      // Анимация фаз генерации ИИ (анализирует/формирует/генерирует)
+      if (loading && personaId && chatId === activeChatId) startAiPhases();
+      else if (!aiLoadingByChat.has(activeChatId)) stopAiPhases();
     }
 
     function cancelAiForChat(chatId = activeChatId) {
@@ -5625,7 +5628,7 @@
       { id: 'app:p2p', icon: '🔗', label: 'P2P-чат', hint: 'связь с человеком' }
     );
     // Штамп сборки — чтобы сразу видеть, что загружена свежая версия (а не старый кеш).
-    const AIGRAM_BUILD = 'features-2';
+    const AIGRAM_BUILD = 'ui-premium-3';
     try {
       console.log('%cAI-Gram build: ' + AIGRAM_BUILD, 'color:#2aabee;font-weight:bold');
       const stampHost = document.querySelector('#uiPanel .settings-shortcuts');
@@ -5636,6 +5639,79 @@
         stampHost.parentNode.insertBefore(stamp, stampHost);
       }
     } catch {}
+
+
+    // ==================================================================================
+    // Премиум-микровзаимодействия: ripple, меню «Создать», фазы генерации ИИ.
+    // ==================================================================================
+
+    // Ripple при нажатии на интерактивные элементы
+    (function installRipple() {
+      const RIPPLE_SEL = '.mini-action, .custom-btn, .icon-btn, .send-btn, .menu-item, .settings-card, .call-control, .theme-choice, .create-btn';
+      document.addEventListener('pointerdown', event => {
+        if (event.button != null && event.button !== 0) return;
+        const target = event.target.closest(RIPPLE_SEL);
+        if (!target || target.disabled || target.hidden) return;
+        target.classList.add('ripple-host');
+        const rect = target.getBoundingClientRect();
+        if (!rect.width) return;
+        const size = Math.max(rect.width, rect.height);
+        const span = document.createElement('span');
+        span.className = 'ripple';
+        span.style.width = span.style.height = `${size}px`;
+        span.style.left = `${event.clientX - rect.left - size / 2}px`;
+        span.style.top = `${event.clientY - rect.top - size / 2}px`;
+        target.appendChild(span);
+        setTimeout(() => span.remove(), 620);
+      }, { passive: true });
+    })();
+
+    // Объединённое меню «Создать» (персонаж / авто-диалог / P2P)
+    (function installCreateMenu() {
+      const btn = document.getElementById('createBtn');
+      const menu = document.getElementById('createMenu');
+      if (!btn || !menu) return;
+      const close = () => { menu.classList.remove('open'); btn.setAttribute('aria-expanded', 'false'); };
+      bindTap(btn, () => {
+        const open = !menu.classList.contains('open');
+        menu.classList.toggle('open', open);
+        btn.setAttribute('aria-expanded', String(open));
+      });
+      menu.addEventListener('click', event => {
+        const item = event.target.closest('[data-create]');
+        if (!item) return;
+        close();
+        // переиспользуем существующие (скрытые) кнопки с их уже привязанными обработчиками
+        document.getElementById(item.dataset.create)?.click();
+      });
+      document.addEventListener('pointerdown', event => {
+        if (!menu.classList.contains('open')) return;
+        if (event.target.closest('#createMenu') || event.target.closest('#createBtn')) return;
+        close();
+      });
+      document.addEventListener('keydown', event => { if (event.key === 'Escape') close(); });
+    })();
+
+    // Фазы генерации ИИ: «анализирует… → формирует ответ… → генерирует…»
+    const AI_PHASES = ['анализирует', 'формирует ответ', 'генерирует'];
+    let aiPhaseTimer = null;
+    let aiPhaseIndex = 0;
+    function startAiPhases() {
+      if (aiPhaseTimer) return;
+      aiPhaseIndex = 0;
+      aiPhaseTimer = setInterval(() => {
+        const state = aiLoadingByChat.get(activeChatId);
+        if (!state) { stopAiPhases(); return; }
+        aiPhaseIndex = (aiPhaseIndex + 1) % AI_PHASES.length;
+        const phase = AI_PHASES[aiPhaseIndex];
+        if (typingStatusText) {
+          typingStatusText.style.opacity = '0';
+          setTimeout(() => { typingStatusText.textContent = phase; typingStatusText.style.opacity = ''; }, 160);
+        }
+        if (!chatScreen.classList.contains('hidden')) status.textContent = `${senderName(state.personaId)} ${phase}...`;
+      }, 1500);
+    }
+    function stopAiPhases() { if (aiPhaseTimer) { clearInterval(aiPhaseTimer); aiPhaseTimer = null; } }
 
 
     function renderInitialShell() {

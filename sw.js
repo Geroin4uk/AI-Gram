@@ -10,7 +10,7 @@
 //  - Новый воркер активируется немедленно (skipWaiting + clients.claim), страница
 //    один раз перезагружается при смене контроллера (см. registerServiceWorker в app.js).
 
-const CACHE_NAME = 'ai-gram-shell-v6';
+const CACHE_NAME = 'ai-gram-shell-v7';
 const APP_SHELL = [
   './',
   './index.html',
