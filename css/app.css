@@ -747,11 +747,13 @@
     }
 
     @media (max-width: 640px), (pointer: coarse) {
-      .message, .chat-row, .menu-item, .settings-card, .theme-choice, .custom-btn, .mini-action, .icon-btn {
+      .chat-row, .menu-item, .settings-card, .theme-choice, .custom-btn, .mini-action, .icon-btn {
         -webkit-touch-callout: none;
         user-select: none;
         touch-action: manipulation;
       }
+      /* Сообщение: жесты не ломаем, но сам текст остаётся выделяемым */
+      .message { -webkit-touch-callout: none; touch-action: manipulation; }
     }
 
     .tetris-easter {
@@ -1328,3 +1330,72 @@
       .call-screen { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
     }
     /* ======================== /MOBILE FULL-BLEED ======================== */
+
+    /* =========================================================================
+       POLISH v8 — FAB «Создать», аккуратное выделение, отклик на тап, safe-area.
+       ========================================================================= */
+
+    /* --- 1. FAB: плавающая круглая кнопка создания в правом нижнем углу списка --- */
+    .chat-actions {
+      position: static;             /* контейнер больше не резервирует полосу */
+      padding: 0; border: 0; background: none;
+    }
+    .create-btn {
+      position: absolute;
+      right: calc(16px + env(safe-area-inset-right, 0px));
+      bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+      z-index: 30;
+      width: 58px; height: 58px;
+      border-radius: 50%;
+      display: grid; place-items: center;
+      background: var(--bubble-me, var(--accent));
+      color: #fff;
+      box-shadow: 0 8px 24px color-mix(in srgb, var(--accent) 45%, transparent), 0 2px 8px rgba(0,0,0,0.3);
+      transition: transform 0.18s var(--ease-spring), box-shadow 0.2s ease, filter 0.2s ease;
+    }
+    .create-btn:hover { filter: brightness(1.07); box-shadow: 0 10px 30px color-mix(in srgb, var(--accent) 58%, transparent), 0 3px 10px rgba(0,0,0,0.32); }
+    .create-btn:active { transform: scale(0.9); }
+    .create-btn .ic { width: 24px; height: 24px; }
+    .create-btn span { display: none; }   /* только плюсик, без текста */
+    /* Меню открывается вверх от FAB */
+    .create-menu {
+      top: auto; left: auto;
+      right: calc(16px + env(safe-area-inset-right, 0px));
+      bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+      transform: translateY(8px) scale(0.96);
+      transform-origin: bottom right;
+    }
+    .create-menu.open { transform: translateY(0) scale(1); }
+    /* Последний чат не прячется под FAB */
+    .chat-list-inner { padding-bottom: 96px; }
+    /* В desktop-split FAB живёт внутри сайдбара */
+    .phone.desktop-split #homeScreen { position: relative; }
+    .phone.desktop-split #homeScreen .create-btn,
+    .phone.desktop-split #homeScreen .create-menu { position: absolute; }
+
+    /* --- 2b. Стилизованное выделение текста под тёмную тему --- */
+    ::selection { background: color-mix(in srgb, var(--accent) 38%, transparent); color: #fff; }
+    .message.me ::selection, .message.own ::selection { background: rgba(255,255,255,0.32); color: #fff; }
+    /* Служебные части не выделяются и не попадают в копирование */
+    .message .time, .message time, .message-status, .message-reactions,
+    .chat-row .meta, .avatar, .typing, .tile-icon, .ic { user-select: none; -webkit-user-select: none; }
+    /* Текст сообщений выделяется на любых устройствах */
+    .message-text, .message .markdown, .message p, .message li, .message code { user-select: text; -webkit-user-select: text; }
+
+    /* --- 3. Отклик на тап для элементов без своего :active --- */
+    .chat-row:active { background: color-mix(in srgb, var(--accent) 10%, rgba(255,255,255,0.05)); }
+    .menu-item:active { background: rgba(255,255,255,0.12); }
+    .settings-card:active, .theme-choice:active { background: rgba(255,255,255,0.1); }
+    .plugin-row .mini-action:active, .custom-btn:active { filter: brightness(1.15); }
+    .search-bar input:active { background: rgba(255,255,255,0.08); }
+    .message:active { filter: brightness(1.06); transition: filter 0.08s ease; }
+
+    /* --- 4. Safe-area: боковые вырезы (landscape) и системные зоны --- */
+    @media (max-width: 760px), (max-height: 560px) {
+      .phone { padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
+      .messages { padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px) * 0.3); }
+      dialog.custom-panel, dialog.ui-panel, dialog.api-panel {
+        max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px);
+      }
+    }
+    /* ========================= /POLISH v8 ========================= */
