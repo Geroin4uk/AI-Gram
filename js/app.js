@@ -1690,11 +1690,11 @@
     // ===================== Metro / Live Tiles (Windows 8 / 10 / Phone) =====================
     const TILE_SIZES = ['small', 'medium', 'wide', 'large'];
     const APP_TILES = [
-      { id: 'app:settings', icon: '⚙️', label: 'Настройки', hint: 'центр управления' },
-      { id: 'app:themes', icon: '🎨', label: 'Внешний вид', hint: 'темы и цвета' },
-      { id: 'app:room', icon: '👥', label: 'ИИ-комната', hint: 'общий групповой чат' },
-      { id: 'app:persona', icon: '✨', label: 'Свой персонаж', hint: 'создать нового' },
-      { id: 'app:autochat', icon: '⏱', label: 'Авто-диалог', hint: 'запуск и остановка' }
+      { id: 'app:settings', icon: '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>', label: 'Настройки', hint: 'центр управления' },
+      { id: 'app:themes', icon: '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r="1.4"/><circle cx="17.5" cy="10.5" r="1.4"/><circle cx="8.5" cy="7.5" r="1.4"/><circle cx="6.5" cy="12.5" r="1.4"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.93 0 1.5-.75 1.5-1.5 0-.4-.15-.75-.4-1-.25-.27-.4-.62-.4-1 0-.83.67-1.5 1.5-1.5H16c3.3 0 6-2.7 6-6 0-4.97-4.5-9-10-9z"/></svg>', label: 'Внешний вид', hint: 'темы и цвета' },
+      { id: 'app:room', icon: '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>', label: 'ИИ-комната', hint: 'общий групповой чат' },
+      { id: 'app:persona', icon: '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.7L19.5 10.5l-5.6 1.9L12 18l-1.9-5.6L4.5 10.5l5.6-1.8z"/></svg>', label: 'Свой персонаж', hint: 'создать нового' },
+      { id: 'app:autochat', icon: '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>', label: 'Авто-диалог', hint: 'запуск и остановка' }
     ];
     let tileContextTargetId = null;
 
@@ -5649,13 +5649,13 @@
     panelMap.p2p = document.getElementById('p2pPanel');
     bindTap(document.getElementById('openP2pBtn'), () => openPanel('p2p'));
     APP_TILES.push(
-      { id: 'app:stats', icon: '📊', label: 'Статистика', hint: 'активность чатов' },
-      { id: 'app:monitor', icon: '🩺', label: 'Монитор', hint: 'скорость и память' },
-      { id: 'app:plugins', icon: '🧩', label: 'Плагины', hint: 'свои боты' },
-      { id: 'app:p2p', icon: '🔗', label: 'P2P-чат', hint: 'связь с человеком' }
+      { id: 'app:stats', icon: '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>', label: 'Статистика', hint: 'активность чатов' },
+      { id: 'app:monitor', icon: '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>', label: 'Монитор', hint: 'скорость и память' },
+      { id: 'app:plugins', icon: '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19.4 13.5a1.9 1.9 0 0 1 0-3l.9-.9a1 1 0 0 0 0-1.4l-2.5-2.5a1 1 0 0 0-1.4 0l-.9.9a1.9 1.9 0 0 1-3 0l-.9-.9a1 1 0 0 0-1.4 0L7.7 8.2a1 1 0 0 0 0 1.4l.9.9a1.9 1.9 0 0 1 0 3l-.9.9a1 1 0 0 0 0 1.4l2.5 2.5a1 1 0 0 0 1.4 0l.9-.9a1.9 1.9 0 0 1 3 0l.9.9a1 1 0 0 0 1.4 0l2.5-2.5a1 1 0 0 0 0-1.4z"/></svg>', label: 'Плагины', hint: 'свои боты' },
+      { id: 'app:p2p', icon: '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>', label: 'P2P-чат', hint: 'связь с человеком' }
     );
     // Штамп сборки — чтобы сразу видеть, что загружена свежая версия (а не старый кеш).
-    const AIGRAM_BUILD = 'identity-6';
+    const AIGRAM_BUILD = 'theme-mobile-7';
     try {
       console.log('%cAI-Gram build: ' + AIGRAM_BUILD, 'color:#2aabee;font-weight:bold');
       const stampHost = document.querySelector('#uiPanel .settings-shortcuts');

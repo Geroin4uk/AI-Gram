@@ -967,7 +967,7 @@
     .ic { width: 22px; height: 22px; display: block; stroke: currentColor; fill: none; flex: none; }
     .icon-btn .ic { width: 21px; height: 21px; }
     .back-icon .ic { width: 24px; height: 24px; }
-    .send-btn .ic { width: 20px; height: 20px; margin-left: 1px; }
+    .send-btn .ic { width: 20px; height: 20px; margin: 0; transform: translate(-1px, 1px); }
     .create-btn .ic { width: 17px; height: 17px; }
     .search-bar .ic { width: 17px; height: 17px; color: var(--muted); position: absolute; left: 14px; top: 50%; transform: translateY(-50%); pointer-events: none; }
     .create-menu .ic { width: 18px; height: 18px; color: var(--accent); }
@@ -1002,12 +1002,12 @@
     /* --- Кнопка отправки: градиент + свечение --- */
     .send-btn {
       display: grid; place-items: center;
-      background: linear-gradient(135deg, #34b4f4, #2a8fee);
+      background: var(--bubble-me, var(--accent));
       color: #fff; border-radius: 50%;
-      box-shadow: 0 6px 18px rgba(42,143,238,0.42);
+      box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 42%, transparent);
       transition: transform 0.18s var(--ease-spring), box-shadow 0.2s ease, filter 0.2s ease;
     }
-    .send-btn:hover { filter: brightness(1.06); box-shadow: 0 8px 24px rgba(42,143,238,0.55); }
+    .send-btn:hover { filter: brightness(1.06); box-shadow: 0 8px 24px color-mix(in srgb, var(--accent) 55%, transparent); }
     .send-btn:active { transform: scale(0.9); }
 
     /* --- Ripple --- */
@@ -1030,7 +1030,7 @@
     }
     .search-bar input:focus {
       border-color: var(--accent);
-      background: rgba(42,171,238,0.07);
+      background: color-mix(in srgb, var(--accent) 7%, transparent);
       box-shadow: 0 0 0 3px var(--accent-soft);
       outline: none;
     }
@@ -1043,7 +1043,7 @@
     }
     .chat-row:hover { background: rgba(255,255,255,0.05); }
     .chat-row:active { transform: scale(0.985); }
-    .chat-row.active { background: linear-gradient(135deg, rgba(42,171,238,0.16), rgba(111,124,255,0.10)); }
+    .chat-row.active { background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, transparent), color-mix(in srgb, var(--accent) 8%, transparent)); }
     .chat-row .avatar {
       box-shadow: 0 4px 14px rgba(0,0,0,0.3);
       transition: transform 0.2s var(--ease-spring), box-shadow 0.2s ease;
@@ -1054,9 +1054,9 @@
     .chat-row .meta .badge:not(:empty) {
       display: inline-grid; place-items: center; min-width: 20px; height: 20px;
       padding: 0 6px; border-radius: 999px;
-      background: linear-gradient(135deg, #34b4f4, #2a8fee);
+      background: var(--bubble-me, var(--accent));
       color: #fff; font-size: 12px; font-weight: 700;
-      box-shadow: 0 3px 9px rgba(42,143,238,0.45);
+      box-shadow: 0 3px 9px color-mix(in srgb, var(--accent) 45%, transparent);
       animation: badgePop 0.3s var(--ease-spring);
     }
     @keyframes badgePop { from { transform: scale(0); } to { transform: scale(1); } }
@@ -1066,7 +1066,7 @@
     .chat-screen .topbar .avatar::after {
       content: ""; position: absolute; inset: -3px; border-radius: inherit;
       border: 2px solid transparent;
-      background: linear-gradient(135deg, var(--accent), #6f7cff) border-box;
+      background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #ffffff)) border-box;
       -webkit-mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
       -webkit-mask-composite: xor; mask-composite: exclude;
       opacity: 0.9; animation: breathe 3.4s var(--ease-out) infinite;
@@ -1079,9 +1079,7 @@
     /* --- Пузыри сообщений: аккуратные тени, появление --- */
     .message { animation: messageDrop 0.34s var(--ease-out) both; }
     .bubble, .message-body { box-shadow: 0 2px 10px rgba(0,0,0,0.18); }
-    .message.own .bubble, .message.me .bubble {
-      background: linear-gradient(135deg, #2f6ea6, #2b5278);
-    }
+    /* цвет своих пузырей берётся из темы (--bubble-me); слой не перекрывает его */
 
     /* --- Панели/диалоги: стекло, spring-появление, крупные скругления --- */
     dialog.custom-panel, dialog.ui-panel, dialog.api-panel, dialog.profile-card, dialog.persona-panel {
@@ -1113,7 +1111,7 @@
     .mini-action:active, .custom-btn:active { transform: scale(0.96); }
     .create-btn {
       display: inline-flex; align-items: center; gap: 7px; justify-content: center;
-      background: linear-gradient(135deg, rgba(42,171,238,0.22), rgba(111,124,255,0.16));
+      background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 22%, transparent), color-mix(in srgb, var(--accent) 12%, transparent));
       color: var(--text); font-weight: 650;
     }
 
@@ -1141,8 +1139,8 @@
 
     /* --- Индикатор ИИ: мягкое свечение, плавная смена фаз --- */
     .typing.ai-loading {
-      background: linear-gradient(135deg, rgba(42,171,238,0.14), rgba(111,124,255,0.10));
-      box-shadow: 0 0 0 1px var(--accent-soft), 0 10px 26px rgba(42,171,238,0.12);
+      background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 14%, transparent), color-mix(in srgb, var(--accent) 8%, transparent));
+      box-shadow: 0 0 0 1px var(--accent-soft), 0 10px 26px color-mix(in srgb, var(--accent) 12%, transparent);
     }
     #typingStatusText { transition: opacity 0.2s ease; }
     .typing-dots span { background: var(--accent); }
@@ -1178,10 +1176,10 @@
 
     /* --- 11. Полноэкранное масштабирование --------------------------------- */
     body { padding: clamp(6px, 1vh, 14px); box-sizing: border-box; }
-    /* Одиночный (мобильный) режим: занимаем почти всё окно */
+    /* Одиночный (мобильный/планшетный) режим: занимаем почти всё окно */
     .phone {
-      width: min(100vw - 12px, clamp(360px, 46vw, 560px));
-      height: min(100dvh - 12px, clamp(640px, 96dvh, 1040px));
+      width: min(100vw - 12px, clamp(380px, 88vw, 760px));
+      height: min(100dvh - 12px, clamp(640px, 97dvh, 1180px));
     }
     /* Desktop-split: почти на весь экран, без «маленькой рамки» */
     @media (min-width: 980px) and (min-height: 620px) {
@@ -1214,7 +1212,7 @@
     .topbar { position: relative; }
     .topbar::after {
       content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
-      background: linear-gradient(90deg, transparent, rgba(42,171,238,0.55), rgba(111,124,255,0.55), transparent);
+      background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 55%, transparent), color-mix(in srgb, var(--accent) 35%, transparent), transparent);
       opacity: 0.6; pointer-events: none;
     }
     .composer {
@@ -1241,7 +1239,7 @@
       background: linear-gradient(160deg, rgba(255,255,255,0.075), rgba(255,255,255,0.028)), var(--bubble-him, rgba(32,43,54,0.92));
     }
     .message.me, .message.own {
-      background: linear-gradient(150deg, rgba(255,255,255,0.14), rgba(255,255,255,0) 45%), var(--bubble-me, linear-gradient(135deg, #2f7bd0, #2a5b8f));
+      background: linear-gradient(150deg, rgba(255,255,255,0.14), rgba(255,255,255,0) 45%), var(--bubble-me, var(--accent));
     }
     /* «хвостик»-скругление к краю, как фирменная деталь */
     .message.me, .message.own { border-bottom-right-radius: 8px; }
@@ -1256,9 +1254,9 @@
     }
     .composer input:focus {
       outline: none;
-      border-color: rgba(42,171,238,0.6);
-      background: rgba(42,171,238,0.06);
-      box-shadow: 0 0 0 3px rgba(42,171,238,0.16), 0 4px 18px rgba(42,171,238,0.10);
+      border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+      background: color-mix(in srgb, var(--accent) 6%, transparent);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent), 0 4px 18px color-mix(in srgb, var(--accent) 10%, transparent);
     }
     .send-btn { width: 46px; height: 46px; }
 
@@ -1266,7 +1264,7 @@
     .chat-row { padding: 12px 14px; margin: 3px 8px; gap: 12px; }
     .chat-row .avatar { width: 50px; height: 50px; font-size: 19px; }
     .chat-row.active {
-      background: linear-gradient(135deg, rgba(42,171,238,0.18), rgba(111,124,255,0.12));
+      background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 18%, transparent), color-mix(in srgb, var(--accent) 10%, transparent));
       box-shadow: inset 3px 0 0 var(--accent);
     }
     .last-typing { color: var(--accent); font-weight: 550; display: inline-flex; align-items: center; gap: 6px; }
@@ -1286,7 +1284,7 @@
 
     /* --- 8. Фирменный wordmark -------------------------------------------------------- */
     .wordmark {
-      background: linear-gradient(90deg, #4cc3ff, #8a94ff);
+      background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #ffffff));
       -webkit-background-clip: text; background-clip: text;
       -webkit-text-fill-color: transparent; color: transparent;
       font-weight: 800;
@@ -1296,3 +1294,37 @@
     @keyframes chatSwitchIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
     .messages.switching { animation: chatSwitchIn 0.24s var(--ease-out); }
     /* ======================== /IDENTITY LAYER v2 ======================== */
+
+
+    /* Галочки статуса: внутри своего пузыря accent-цвет сливался бы с темой,
+       поэтому там всегда белый с разной силой (отправлено/прочитано). */
+    .message.me .message-status, .message.own .message-status { color: rgba(255,255,255,0.62); }
+    .message.me .message-status.read, .message.own .message-status.read { color: #ffffff; text-shadow: 0 0 6px rgba(255,255,255,0.35); }
+    /* Иконки в плитках */
+    .tile-icon .ic { width: 26px; height: 26px; }
+    .tile-size-small .tile-icon .ic { width: 22px; height: 22px; }
+
+    /* =========================================================================
+       MOBILE FULL-BLEED — на телефонах приложение занимает весь экран целиком:
+       без полей, рамки и скруглений «карточки». Safe-area учитывается для чёлки
+       и жестовой полосы (PWA standalone).
+       ========================================================================= */
+    @media (max-width: 760px), (max-height: 560px) {
+      body { padding: 0; place-items: stretch; }
+      .phone {
+        width: 100vw;
+        width: 100dvw;
+        height: 100vh;
+        height: 100dvh;
+        max-width: none;
+        max-height: none;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+      }
+      /* Чёлка/статус-бар и жестовая полоса */
+      .topbar { padding-top: calc(12px + env(safe-area-inset-top, 0px)); }
+      .composer { padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+      .call-screen { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+    }
+    /* ======================== /MOBILE FULL-BLEED ======================== */
