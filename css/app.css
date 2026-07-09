@@ -971,7 +971,7 @@
     .back-icon .ic { width: 24px; height: 24px; }
     .send-btn .ic { width: 20px; height: 20px; margin: 0; transform: translate(-1px, 1px); }
     .create-btn .ic { width: 17px; height: 17px; }
-    .search-bar .ic { width: 17px; height: 17px; color: var(--muted); position: absolute; left: 14px; top: 50%; transform: translateY(-50%); pointer-events: none; }
+    .search-bar .ic { width: 17px; height: 17px; color: var(--muted); position: absolute; left: 27px; top: 50%; transform: translateY(-50%); pointer-events: none; }
     .create-menu .ic { width: 18px; height: 18px; color: var(--accent); }
 
     /* --- Living background: мягкое освещение + тонкий noise --- */
@@ -1124,8 +1124,8 @@
       min-width: 210px; padding: 6px;
       display: flex; flex-direction: column; gap: 2px;
       border-radius: var(--radius-md);
-      background: linear-gradient(180deg, rgba(34,45,57,0.98), rgba(23,33,43,0.98));
-      border: 1px solid rgba(255,255,255,0.09);
+      background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 94%, #ffffff 6%), var(--panel));
+      border: 1px solid color-mix(in srgb, var(--accent) 18%, rgba(255,255,255,0.08));
       box-shadow: var(--shadow-pop);
       opacity: 0; transform: translateY(-8px) scale(0.96); transform-origin: top left;
       pointer-events: none; transition: opacity 0.2s var(--ease-out), transform 0.24s var(--ease-spring);
@@ -1137,7 +1137,7 @@
       color: var(--text); font-size: 14px; font-weight: 550; text-align: left;
       transition: background 0.16s ease;
     }
-    .create-menu .menu-item:hover { background: rgba(255,255,255,0.08); }
+    .create-menu .menu-item:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
 
     /* --- Индикатор ИИ: мягкое свечение, плавная смена фаз --- */
     .typing.ai-loading {
@@ -1345,7 +1345,7 @@
       right: calc(16px + env(safe-area-inset-right, 0px));
       bottom: calc(16px + env(safe-area-inset-bottom, 0px));
       z-index: 30;
-      width: 58px; height: 58px;
+      width: 50px; height: 50px;
       border-radius: 50%;
       display: grid; place-items: center;
       background: var(--bubble-me, var(--accent));
@@ -1355,19 +1355,19 @@
     }
     .create-btn:hover { filter: brightness(1.07); box-shadow: 0 10px 30px color-mix(in srgb, var(--accent) 58%, transparent), 0 3px 10px rgba(0,0,0,0.32); }
     .create-btn:active { transform: scale(0.9); }
-    .create-btn .ic { width: 24px; height: 24px; }
+    .create-btn .ic { width: 21px; height: 21px; }
     .create-btn span { display: none; }   /* только плюсик, без текста */
     /* Меню открывается вверх от FAB */
     .create-menu {
       top: auto; left: auto;
       right: calc(16px + env(safe-area-inset-right, 0px));
-      bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+      bottom: calc(76px + env(safe-area-inset-bottom, 0px));
       transform: translateY(8px) scale(0.96);
       transform-origin: bottom right;
     }
     .create-menu.open { transform: translateY(0) scale(1); }
     /* Последний чат не прячется под FAB */
-    .chat-list-inner { padding-bottom: 96px; }
+    .chat-list-inner { padding-bottom: 84px; }
     /* В desktop-split FAB живёт внутри сайдбара */
     .phone.desktop-split #homeScreen { position: relative; }
     .phone.desktop-split #homeScreen .create-btn,
@@ -1399,3 +1399,7 @@
       }
     }
     /* ========================= /POLISH v8 ========================= */
+
+
+    .tile-pin-icon { display: grid; place-items: center; width: 26px; height: 26px; flex: none; }
+    .tile-pin-icon .ic { width: 19px; height: 19px; color: var(--accent); }

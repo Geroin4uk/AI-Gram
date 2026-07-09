@@ -1295,6 +1295,7 @@
 
     function startAutoChat() {
       if (autoChatRunning) return;
+      if (isP2pChat(activeChat())) { showToast('Авто-диалог недоступен в P2P-чате'); return; }
       autoChatRunning = true;
       autoChatChatId = activeChatId;
       autoChatIndicator.classList.add('open');
@@ -1329,7 +1330,7 @@
         try {
           if (!autoChatRunning || scheduledChatId !== autoChatChatId || scheduledChatId !== activeChatId) { stopAutoChat(); return; }
           const chat = chats[scheduledChatId];
-          if (!chat) { stopAutoChat(); return; }
+          if (!chat || isP2pChat(chat)) { stopAutoChat(); return; }
           const candidates = chat.members.filter(id => personas[id]);
           const speaker = candidates[Math.floor(Math.random() * candidates.length)] || chat.members[0];
           isVisibleChat = chat.id === activeChatId && !chatScreen.classList.contains('hidden');
@@ -1345,13 +1346,13 @@
           isVisibleChat = chat.id === activeChatId && !chatScreen.classList.contains('hidden');
           if (isVisibleChat) setAiLoading(false);
           addMessageToChat(chat.id, reply, speaker);
-          if (isVisibleChat) status.textContent = chat.type === 'group' ? `${chat.members.length} ИИ-персонажа онлайн` : 'в сети';
+          if (isVisibleChat) status.textContent = isP2pChat(chat) ? (p2p.dc?.readyState === 'open' ? 'в сети · P2P' : 'не в сети · P2P') : chat.type === 'group' ? `${chat.members.length} ИИ-персонажа онлайн` : 'в сети';
         } catch (error) {
           const chat = chats[scheduledChatId];
           isVisibleChat = !!chat && chat.id === activeChatId && !chatScreen.classList.contains('hidden');
           if (isVisibleChat) {
             setAiLoading(false);
-            status.textContent = chat.type === 'group' ? `${chat.members.length} ИИ-персонажа онлайн` : 'в сети';
+            status.textContent = isP2pChat(chat) ? (p2p.dc?.readyState === 'open' ? 'в сети · P2P' : 'не в сети · P2P') : chat.type === 'group' ? `${chat.members.length} ИИ-персонажа онлайн` : 'в сети';
           }
           showToast(error?.message || 'Авто-диалог временно недоступен');
         } finally {
@@ -1580,9 +1581,10 @@
     }
 
     function activeChat() { return chats[activeChatId]; }
-    function chatName(chat) { return chat.type === 'group' ? chat.title : (personas[chat.members[0]]?.name || 'Персонаж'); }
-    function chatAvatar(chat) { return chat.type === 'group' ? chat.avatar : (personas[chat.members[0]]?.avatar || '✨'); }
-    function chatCss(chat) { return chat.type === 'group' ? 'group-avatar' : (personas[chat.members[0]]?.css || 'group-avatar'); }
+    function isP2pChat(chat) { return chat?.type === 'p2p'; }
+    function chatName(chat) { if (isP2pChat(chat)) return chat.title || 'P2P-собеседник'; return chat.type === 'group' ? chat.title : (personas[chat.members[0]]?.name || 'Персонаж'); }
+    function chatAvatar(chat) { if (isP2pChat(chat)) return (chat.title || 'P').trim().charAt(0).toUpperCase() || 'P'; return chat.type === 'group' ? chat.avatar : (personas[chat.members[0]]?.avatar || '✨'); }
+    function chatCss(chat) { if (isP2pChat(chat)) return 'group-avatar'; return chat.type === 'group' ? 'group-avatar' : (personas[chat.members[0]]?.css || 'group-avatar'); }
 
     function bindTap(element, handler) {
       if (!element) return;
@@ -1817,7 +1819,7 @@
       const appItems = APP_TILES.map(item => ({ id: item.id, label: item.label, icon: item.icon }));
       const rows = [...chatItems, ...appItems].map(item => `
         <button class="tile-pin-row${pinned.has(item.id) ? ' pinned' : ''}" type="button" data-tile-pin-toggle="${item.id}">
-          <span class="tile-pin-icon">${escapeHtml(item.icon)}</span>
+          <span class="tile-pin-icon">${String(item.icon).startsWith('<svg') ? item.icon : escapeHtml(item.icon)}</span>
           <span class="tile-pin-label">${escapeHtml(item.label)}</span>
           <span class="switch${pinned.has(item.id) ? ' on' : ''}"></span>
         </button>`).join('');
@@ -2022,7 +2024,11 @@
       return prefix + text;
     }
 
-    function senderName(who) { return isOwnMessage(who) ? 'Вы' : personas[who]?.name || who; }
+    function senderName(who) {
+      if (isOwnMessage(who)) return 'Вы';
+      if (who === 'p2p-peer') { const chat = Object.values(chats).find(c => c.type === 'p2p'); return chat?.title || 'Собеседник'; }
+      return personas[who]?.name || who;
+    }
 
     function voiceWaveBars(message) {
       const source = `${message?.text || ''}|${message?.duration || 7}|${message?.who || ''}|${message?.id || ''}`;
@@ -2392,7 +2398,7 @@
       chatTitle.textContent = chatName(chat);
       avatarBtn.textContent = chatAvatar(chat);
       avatarBtn.className = `avatar ${chatCss(chat)}`;
-      status.textContent = chat.type === 'group' ? `${chat.members.length} ИИ-персонажа онлайн` : 'был в сети только что';
+      status.textContent = isP2pChat(chat) ? (p2p.dc?.readyState === 'open' ? 'в сети · P2P' : 'не в сети · P2P') : chat.type === 'group' ? `${chat.members.length} ИИ-персонажа онлайн` : 'был в сети только что';
       updateTypingForActiveChat();
       messageInput.placeholder = messagePlaceholder(chat);
       clearReply();
@@ -3661,6 +3667,7 @@
     }
 
     function sendAttachmentFile(file) {
+      if (isP2pChat(activeChat())) { showToast('В P2P-чате пока только текст'); return; }
       if (!file) { showToast('Выбери файл'); return; }
       const reader = new FileReader();
       reader.onerror = () => showToast('Не удалось прочитать вложение');
@@ -3914,6 +3921,15 @@
       if (!text) return;
       const reply = replyTarget;
       haptic(10);
+      // P2P-чат: шлём собеседнику напрямую, без ИИ
+      if (isP2pChat(activeChat())) {
+        if (!p2p.dc || p2p.dc.readyState !== 'open') { showToast('Собеседник не в сети. Создайте новое подключение через + → P2P-чат'); return; }
+        try { p2p.dc.send(JSON.stringify({ t: 'msg', text: text.slice(0, 4000) })); }
+        catch { showToast('Не удалось отправить'); return; }
+        addMessage(text, 'me', reply);
+        clearReply(); messageInput.value = ''; clearDraft(activeChatId); updateMessageCounter(); messageInput.focus({ preventScroll: true });
+        return;
+      }
       addMessage(text, 'me', reply);
       const launchTetris = shouldLaunchTetris(text);
       clearReply(); messageInput.value = ''; clearDraft(activeChatId); updateMessageCounter(); messageInput.focus({ preventScroll: true });
@@ -3929,6 +3945,8 @@
       cancelAiForChat(chatId);
       const chat = chats[chatId];
       if (!chat) return;
+      // P2P-чат: сообщения идут живому человеку, ИИ здесь не участвует
+      if (isP2pChat(chat)) return;
       const first = chat.type === 'group' ? chat.members[Math.floor(Math.random() * chat.members.length)] : chat.members[0];
       const request = { id: ++aiRequestSeq, controller: new AbortController() };
       aiRequestByChat.set(chatId, request);
@@ -4265,7 +4283,7 @@
       updateChatInContext(chat.id, draft => ({ ...draft, messages: [] }));
       clearReply();
       saveChats();
-      addMessage('Историю стёрли. Начнём заново.', activeChat().type === 'group' ? 'danil' : activeChat().members[0]);
+      addMessage('Историю стёрли. Начнём заново.', activeChat().type === 'group' ? 'danil' : (isP2pChat(activeChat()) ? 'p2p-peer' : activeChat().members[0]));
       closeOverlay();
     }
 
@@ -4357,7 +4375,9 @@
 
     function openProfile() {
       const chat = activeChat();
-      const persona = chat.type === 'group' ? { name: chat.title, handle: '@ai_group_room', avatar: chat.avatar, css: 'group-avatar', status: `Статус: ${chat.members.length} ИИ-персонажа общаются с тобой и между собой`, about: 'О себе: групповой чат для Данила, Ярика и пользователя.' } : personas[chat.members[0]];
+      const persona = isP2pChat(chat)
+        ? { name: chatName(chat), handle: '@p2p', avatar: chatAvatar(chat), css: 'group-avatar', status: `Статус: ${p2p.dc?.readyState === 'open' ? 'соединение активно' : 'не в сети'}`, about: 'О себе: живой собеседник, подключённый напрямую по WebRTC. Сообщения не проходят через сервер.' }
+        : chat.type === 'group' ? { name: chat.title, handle: '@ai_group_room', avatar: chat.avatar, css: 'group-avatar', status: `Статус: ${chat.members.length} ИИ-персонажа общаются с тобой и между собой`, about: 'О себе: групповой чат для Данила, Ярика и пользователя.' } : personas[chat.members[0]];
       document.getElementById('profileAvatar').textContent = persona.avatar;
       document.getElementById('profileAvatar').className = `big-avatar ${persona.css}`;
       document.getElementById('profileName').textContent = persona.name;
@@ -4645,6 +4665,7 @@
     }
 
     async function startCall(video = false) {
+      if (isP2pChat(activeChat())) { showToast('Звонки в P2P-чате пока недоступны'); return; }
       closeOverlay();
       const chat = activeChat();
       callScreen.classList.add('open'); callScreen.classList.toggle('video-mode', video); callControls.classList.toggle('video-controls', true);
@@ -5520,6 +5541,24 @@
         setTimeout(resolve, 2600);
       });
     }
+    let p2pChatId = null;
+    function p2pEnsureChat(partnerName) {
+      // Один p2p-чат на приложение: переиспользуем существующий, обновляя имя собеседника
+      let chat = Object.values(chats).find(c => c.type === 'p2p');
+      if (!chat) {
+        const id = `p2p-${uid()}`;
+        chat = { id, type: 'p2p', title: partnerName || 'P2P-собеседник', members: [], messages: [], unread: 0, createdAt: Date.now(), updatedAt: Date.now() };
+        // Важно: через setChats, а не прямой вставкой — иначе AppContext не знает про чат
+        // и updateChatInContext (переименование, сообщения) молча не находит его.
+        setChats({ ...chats, [id]: chat });
+      } else if (partnerName && chat.title !== partnerName) {
+        updateChatInContext(chat.id, draft => { draft.title = partnerName; draft.updatedAt = Date.now(); return draft; });
+      }
+      p2pChatId = chat.id;
+      saveChats();
+      renderChatList();
+      return chats[p2pChatId];
+    }
     function p2pWireChannel(dc) {
       p2p.dc = dc;
       dc.onopen = () => {
@@ -5527,12 +5566,43 @@
         if (p2pEls.input) p2pEls.input.disabled = false;
         if (p2pEls.send) p2pEls.send.disabled = false;
         p2pAppendLog('system', 'Соединение установлено');
+        // Протокол знакомства: отправляем своё имя из профиля
+        const profile = loadUserProfile();
+        try { dc.send(JSON.stringify({ t: 'hello', name: String(profile?.name || 'Собеседник').slice(0, 40) })); } catch {}
+        // Создаём настоящий чат в списке и открываем его
+        const chat = p2pEnsureChat(null);
+        addMessageToChat(chat.id, 'Соединение установлено. Это прямой P2P-чат: сообщения идут между устройствами напрямую.', 'p2p-peer', null, null, 'text', { system: true });
+        closePanels();
+        openChat(chat.id);
+        showToast('P2P-чат создан');
       };
-      dc.onmessage = event => p2pAppendLog('peer', String(event.data).slice(0, 4000));
+      dc.onmessage = event => {
+        const raw = String(event.data).slice(0, 4200);
+        let payload = null;
+        try { payload = JSON.parse(raw); } catch {}
+        if (payload && payload.t === 'hello') {
+          const name = String(payload.name || '').slice(0, 40).trim();
+          if (name) {
+            p2pEnsureChat(name);
+            // renderChatList рисует через requestAnimationFrame, а в фоновой вкладке rAF
+            // заморожен — обновляем видимую строку списка синхронно, без ожидания кадра.
+            const rowName = document.querySelector(`.chat-row[data-chat-id="${CSS.escape(p2pChatId)}"] .name`);
+            if (rowName) rowName.textContent = name;
+            if (activeChatId === p2pChatId) { openChat(p2pChatId); }
+          }
+          return;
+        }
+        const text = payload && payload.t === 'msg' ? String(payload.text || '').slice(0, 4000) : raw;
+        if (!text) return;
+        p2pAppendLog('peer', text);
+        const chat = p2pEnsureChat(null);
+        addMessageToChat(chat.id, text, 'p2p-peer');
+      };
       dc.onclose = () => {
         p2pStatus('Соединение закрыто.');
         if (p2pEls.input) p2pEls.input.disabled = true;
         if (p2pEls.send) p2pEls.send.disabled = true;
+        if (p2pChatId && chats[p2pChatId]) addMessageToChat(p2pChatId, 'Собеседник отключился. Для нового разговора создайте подключение заново: + → P2P-чат.', 'p2p-peer', null, null, 'text', { system: true });
       };
     }
     function p2pWireConn(pc) {
@@ -5605,7 +5675,12 @@
     function p2pSendMessage() {
       const text = (p2pEls.input?.value || '').trim();
       if (!text || !p2p.dc || p2p.dc.readyState !== 'open') return;
-      try { p2p.dc.send(text); p2pAppendLog('me', text); if (p2pEls.input) p2pEls.input.value = ''; }
+      try {
+        p2p.dc.send(JSON.stringify({ t: 'msg', text: text.slice(0, 4000) }));
+        p2pAppendLog('me', text);
+        if (p2pChatId && chats[p2pChatId]) addMessageToChat(p2pChatId, text, 'me');
+        if (p2pEls.input) p2pEls.input.value = '';
+      }
       catch { showToast('Сообщение не отправлено'); }
     }
     bindTap(document.getElementById('p2pCreateBtn'), p2pCreateInvite);
@@ -5655,7 +5730,7 @@
       { id: 'app:p2p', icon: '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>', label: 'P2P-чат', hint: 'связь с человеком' }
     );
     // Штамп сборки — чтобы сразу видеть, что загружена свежая версия (а не старый кеш).
-    const AIGRAM_BUILD = 'polish-8';
+    const AIGRAM_BUILD = 'p2p-chat-9';
     try {
       console.log('%cAI-Gram build: ' + AIGRAM_BUILD, 'color:#2aabee;font-weight:bold');
       const stampHost = document.querySelector('#uiPanel .settings-shortcuts');
