@@ -1403,3 +1403,18 @@
 
     .tile-pin-icon { display: grid; place-items: center; width: 26px; height: 26px; flex: none; }
     .tile-pin-icon .ic { width: 19px; height: 19px; color: var(--accent); }
+
+    /* =================== Каталог персонажей + патч-ноуты =================== */
+    .catalog-grid { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
+    .catalog-card { padding: 12px 14px; border-radius: var(--radius-md); background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.06); }
+    .catalog-card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+    .catalog-ava { width: 44px; height: 44px; font-size: 17px; flex: none; }
+    .catalog-name { font-weight: 700; font-size: 15px; }
+    .catalog-about { font-size: 12.5px; opacity: 0.7; margin-top: 2px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .catalog-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .catalog-actions .mini-action { flex: none; padding: 8px 14px; }
+    .patch-notes-list { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+    .patch-note-row { padding: 10px 12px 10px 34px; border-radius: 12px; background: rgba(255,255,255,0.05); font-size: 14px; line-height: 1.4; position: relative; }
+    .patch-note-row::before { content: "✦"; position: absolute; left: 13px; top: 10px; color: var(--accent); }
+    .patch-notes-panel { max-width: 480px; }
+    /* =================== /Каталог + патч-ноуты =================== */
