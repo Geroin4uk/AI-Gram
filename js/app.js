@@ -1086,7 +1086,7 @@
     const uiState = { overlay: false, panel: null, menu: null };
     let lastFocusedBeforeModal = null;
     const FOCUSABLE_SELECTOR = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
-    const panelMap = { profile: profileCard, stats: chatStatsPanel, themes: themePanel, custom: customPanel, userProfile: userProfilePanel, api: apiPanel, apiGuide: apiGuidePanel, persona: personaPanel, ui: uiPanel, stickers: stickerPanel, tiles: tilePanel };
+    const panelMap = { profile: profileCard, stats: chatStatsPanel, themes: themePanel, custom: customPanel, userProfile: userProfilePanel, api: apiPanel, apiGuide: apiGuidePanel, persona: personaPanel, ui: uiPanel, stickers: stickerPanel, tiles: tilePanel, plugin: document.getElementById('pluginPanel'), p2p: document.getElementById('p2pPanel'), catalog: document.getElementById('catalogPanel'), patchnotes: document.getElementById('patchNotesPanel') };
     const menuMap = { home: homeMenuPopover, chat: menuPopover, tile: tileContextMenu };
 
 
@@ -1316,7 +1316,7 @@
     }
 
     function autoSeedText(chat) {
-      const last = chat.messages.at(-1);
+      const last = (chat.messages || []).at(-1);
       if (!last) return 'Начни разговор сам, коротко и живо.';
       return `${senderName(last.who)} написал: ${last.text || (last.image ? 'отправил картинку' : 'молчит')}. Продолжи диалог сам, коротко.`;
     }
@@ -1346,13 +1346,13 @@
           isVisibleChat = chat.id === activeChatId && !chatScreen.classList.contains('hidden');
           if (isVisibleChat) setAiLoading(false);
           addMessageToChat(chat.id, reply, speaker);
-          if (isVisibleChat) status.textContent = isP2pChat(chat) ? (p2p.dc?.readyState === 'open' ? 'в сети · P2P' : 'не в сети · P2P') : chat.type === 'group' ? `${chat.members.length} ИИ-персонажа онлайн` : 'в сети';
+          if (isVisibleChat) status.textContent = isP2pChat(chat) ? (p2pConnected() ? 'в сети · P2P' : 'не в сети · P2P') : chat.type === 'group' ? `${chat.members.length} ИИ-персонажа онлайн` : 'в сети';
         } catch (error) {
           const chat = chats[scheduledChatId];
           isVisibleChat = !!chat && chat.id === activeChatId && !chatScreen.classList.contains('hidden');
           if (isVisibleChat) {
             setAiLoading(false);
-            status.textContent = isP2pChat(chat) ? (p2p.dc?.readyState === 'open' ? 'в сети · P2P' : 'не в сети · P2P') : chat.type === 'group' ? `${chat.members.length} ИИ-персонажа онлайн` : 'в сети';
+            status.textContent = isP2pChat(chat) ? (p2pConnected() ? 'в сети · P2P' : 'не в сети · P2P') : chat.type === 'group' ? `${chat.members.length} ИИ-персонажа онлайн` : 'в сети';
           }
           showToast(error?.message || 'Авто-диалог временно недоступен');
         } finally {
@@ -1627,7 +1627,7 @@
 
     function createChatRow(chat) {
       const name = chatName(chat);
-      const last = chat.messages.at(-1);
+      const last = (chat.messages || []).at(-1);
       const row = document.createElement('button');
       row.className = `chat-row soft-virtualized${chat.unread ? ' has-unread' : ''}`;
       row.classList.toggle('active', chat.id === activeChatId);
@@ -1734,7 +1734,7 @@
       const chat = chats[id];
       if (!chat) return null;
       const name = chatName(chat);
-      const last = chat.messages.at(-1);
+      const last = (chat.messages || []).at(-1);
       const size = tileSizeFor(id);
       const tile = document.createElement('button');
       tile.type = 'button';
@@ -2323,6 +2323,7 @@
 
     function renderMessages(forceScroll = true, keepWindow = false) {
       const chat = activeChat();
+      if (!chat || !Array.isArray(chat.messages)) { messages.replaceChildren(); return; }
       const wasNearBottom = isNearBottom();
       if (!keepWindow) renderedWindowStart = Math.max(0, chat.messages.length - MESSAGE_WINDOW_SIZE);
       renderedWindowStart = Math.max(0, Math.min(renderedWindowStart, Math.max(0, chat.messages.length - 1)));
@@ -2398,7 +2399,7 @@
       chatTitle.textContent = chatName(chat);
       avatarBtn.textContent = chatAvatar(chat);
       avatarBtn.className = `avatar ${chatCss(chat)}`;
-      status.textContent = isP2pChat(chat) ? (p2p.dc?.readyState === 'open' ? 'в сети · P2P' : 'не в сети · P2P') : chat.type === 'group' ? `${chat.members.length} ИИ-персонажа онлайн` : 'был в сети только что';
+      status.textContent = isP2pChat(chat) ? (p2pConnected() ? 'в сети · P2P' : 'не в сети · P2P') : chat.type === 'group' ? `${chat.members.length} ИИ-персонажа онлайн` : 'был в сети только что';
       updateTypingForActiveChat();
       messageInput.placeholder = messagePlaceholder(chat);
       clearReply();
@@ -4351,6 +4352,7 @@
       if (action === 'persona') switchSettingsPanel('persona', renderPersonaList);
       if (action === 'plugin') switchSettingsPanel('plugin', renderPluginList);
       if (action === 'p2p') switchSettingsPanel('p2p');
+      if (action === 'catalog') switchSettingsPanel('catalog', renderCatalog);
       if (action === 'custom') {
         const personaId = editablePersonaIdFromChat() || 'danil';
         if (!builtInPersonas[personaId]) { showToast('Кастомизация доступна в личном чате Данила или Ярика'); return; }
@@ -4376,7 +4378,7 @@
     function openProfile() {
       const chat = activeChat();
       const persona = isP2pChat(chat)
-        ? { name: chatName(chat), handle: '@p2p', avatar: chatAvatar(chat), css: 'group-avatar', status: `Статус: ${p2p.dc?.readyState === 'open' ? 'соединение активно' : 'не в сети'}`, about: 'О себе: живой собеседник, подключённый напрямую по WebRTC. Сообщения не проходят через сервер.' }
+        ? { name: chatName(chat), handle: '@p2p', avatar: chatAvatar(chat), css: 'group-avatar', status: `Статус: ${p2pConnected() ? 'соединение активно' : 'не в сети'}`, about: 'О себе: живой собеседник, подключённый напрямую по WebRTC. Сообщения не проходят через сервер.' }
         : chat.type === 'group' ? { name: chat.title, handle: '@ai_group_room', avatar: chat.avatar, css: 'group-avatar', status: `Статус: ${chat.members.length} ИИ-персонажа общаются с тобой и между собой`, about: 'О себе: групповой чат для Данила, Ярика и пользователя.' } : personas[chat.members[0]];
       document.getElementById('profileAvatar').textContent = persona.avatar;
       document.getElementById('profileAvatar').className = `big-avatar ${persona.css}`;
@@ -5462,7 +5464,23 @@
         const del = document.createElement('button');
         del.type = 'button'; del.className = 'mini-action'; del.textContent = 'Удал.';
         bindTap(del, () => { stopPluginWorker(plugin.id); plugins = plugins.filter(p => p.id !== plugin.id); savePlugins(plugins); renderPluginList(); });
-        row.append(title, toggle, edit, del);
+        const share = document.createElement('button');
+        share.type = 'button'; share.className = 'mini-action'; share.textContent = 'Код';
+        bindTap(share, async () => {
+          const code = await makeShareCode('plugin', { name: plugin.name, code: plugin.code });
+          const ok = await copyTextToClipboard(code);
+          showToast(ok ? `Код плагина «${plugin.name}» скопирован` : 'Скопируйте код вручную');
+        });
+        row.append(title, toggle, edit, share, del);
+        if (p2pConnected()) {
+          const toPeer = document.createElement('button');
+          toPeer.type = 'button'; toPeer.className = 'mini-action'; toPeer.textContent = '→P2P';
+          bindTap(toPeer, () => {
+            try { p2p.dc.send(JSON.stringify({ t: 'share', kind: 'plugin', item: { name: plugin.name, code: plugin.code } })); showToast('Плагин отправлен собеседнику'); }
+            catch { showToast('Не удалось отправить'); }
+          });
+          row.append(toPeer);
+        }
         pluginListEl.appendChild(row);
       });
     }
@@ -5488,6 +5506,7 @@
 
     // ---- 5) P2P-чат между людьми (WebRTC, ручная сигнализация копипастом) -------------
     const p2p = { pc: null, dc: null, role: null };
+    function p2pConnected() { try { return !!(p2p && p2p.dc && p2p.dc.readyState === 'open'); } catch { return false; } }
     const p2pEls = {
       signalBox: document.getElementById('p2pSignalBox'),
       outLabel: document.getElementById('p2pOutLabel'),
@@ -5592,6 +5611,7 @@
           }
           return;
         }
+        if (payload && payload.t === 'share') { handleP2pShare(payload); return; }
         const text = payload && payload.t === 'msg' ? String(payload.text || '').slice(0, 4000) : raw;
         if (!text) return;
         p2pAppendLog('peer', text);
@@ -5632,7 +5652,9 @@
       if (p2pEls.out) p2pEls.out.value = await p2pPack({ sdp: p2p.pc.localDescription });
       if (p2pEls.inLabel) p2pEls.inLabel.textContent = 'Вставьте ответный код собеседника';
       if (p2pEls.in) p2pEls.in.value = '';
-      p2pStatus('Отправьте код-приглашение и вставьте ответ.');
+      // Код сразу уходит в буфер — меньше действий для пользователя
+      if (p2pEls.out?.value) await p2pAutoCopy(p2pEls.out.value, 'Код-приглашение');
+      p2pStatus('Код у вас в буфере. Отправьте его и вставьте ответ в поле выше.');
     }
     function p2pStartJoin() {
       if (!('RTCPeerConnection' in window)) { showToast('WebRTC не поддерживается'); return; }
@@ -5730,7 +5752,7 @@
       { id: 'app:p2p', icon: '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>', label: 'P2P-чат', hint: 'связь с человеком' }
     );
     // Штамп сборки — чтобы сразу видеть, что загружена свежая версия (а не старый кеш).
-    const AIGRAM_BUILD = 'p2p-chat-9';
+    const AIGRAM_BUILD = 'share-hub-10';
     try {
       console.log('%cAI-Gram build: ' + AIGRAM_BUILD, 'color:#2aabee;font-weight:bold');
       const stampHost = document.querySelector('#uiPanel .settings-shortcuts');
@@ -5814,6 +5836,268 @@
       }, 1500);
     }
     function stopAiPhases() { if (aiPhaseTimer) { clearInterval(aiPhaseTimer); aiPhaseTimer = null; } }
+
+
+    // ==================================================================================
+    // Share-хаб: патч-ноуты, каталог персонажей, обмен плагинами/персонажами кодами
+    // и через P2P, упрощённое P2P-подключение (умное поле + авто-копирование).
+    // ==================================================================================
+
+    // ---- Патч-ноуты: показываются один раз при первом входе в новую сборку ----------
+    const AIGRAM_CHANGELOG = {
+      'share-hub-10': [
+        'P2P-подключение стало проще: одно поле, коды применяются и копируются автоматически',
+        'Каталог персонажей: делитесь своими персонажами кодом и добавляйте чужих (+ → Каталог)',
+        'Плагинами теперь можно делиться: кнопка «Код» у каждого плагина и импорт по коду',
+        'При активном P2P-чате персонажей и плагины можно пересылать собеседнику напрямую',
+        'Добавлены эти самые патч-ноуты — теперь вы всегда узнаете, что нового'
+      ]
+    };
+    function maybeShowPatchNotes() {
+      const seen = storageGet('aigramLastSeenBuild', '');
+      if (seen === AIGRAM_BUILD) return;
+      // Свежая установка: не перекрываем онбординг, ноуты появятся при следующем входе
+      if (!seen && !loadUserProfile()?.name) return;
+      storageSet('aigramLastSeenBuild', AIGRAM_BUILD);
+      const notes = AIGRAM_CHANGELOG[AIGRAM_BUILD];
+      if (!notes || !notes.length) return;
+      const panel = document.getElementById('patchNotesPanel');
+      const list = document.getElementById('patchNotesList');
+      const buildEl = document.getElementById('patchNotesBuild');
+      if (!panel || !list) return;
+      if (buildEl) buildEl.textContent = `Сборка ${AIGRAM_BUILD}`;
+      list.replaceChildren(...notes.map(text => {
+        const row = document.createElement('div');
+        row.className = 'patch-note-row';
+        row.textContent = text;
+        return row;
+      }));
+      panel.showModal?.();
+      panel.classList.add('open');
+      uiState.panel = 'patchnotes';
+      syncOverlay();
+    }
+
+    // ---- Общие share-коды (сжатие как в P2P, свой префикс и вид полезной нагрузки) ---
+    async function makeShareCode(kind, item) {
+      const packed = await p2pPack({ k: kind, v: 1, item });
+      return `AIG.${packed}`;
+    }
+    async function readShareCode(code) {
+      const raw = String(code || '').trim();
+      if (!raw.startsWith('AIG.')) return null;
+      try {
+        const data = await p2pUnpack(raw.slice(4));
+        if (!data || typeof data.k !== 'string' || !data.item) return null;
+        return data;
+      } catch { return null; }
+    }
+
+    // ---- Санитайзеры принимаемого контента -------------------------------------------
+    function sanitizePersonaPayload(item) {
+      const name = String(item?.name || '').trim().slice(0, 40);
+      const prompt = String(item?.prompt || '').trim().slice(0, 2000);
+      const avatar = String(item?.avatar || '').trim().slice(0, 4);
+      if (!name || !prompt) return null;
+      return { name, prompt, avatar };
+    }
+    function sanitizePluginPayload(item) {
+      const name = String(item?.name || '').trim().slice(0, 40);
+      const code = String(item?.code || '').trim().slice(0, 20000);
+      if (!name || !code) return null;
+      return { name, code };
+    }
+    function addImportedPersona(payload) {
+      const clean = sanitizePersonaPayload(payload);
+      if (!clean) { showToast('Код персонажа повреждён'); return null; }
+      // Одноимённый персонаж обновляется, а не дублируется (повторный импорт/пересылка)
+      const existing = Object.values(customPersonas).find(p => p.name === clean.name);
+      const id = existing ? existing.id : makePersonaId(clean.name);
+      customPersonas[id] = {
+        id,
+        name: clean.name,
+        handle: '@' + clean.name.toLowerCase().replace(/[^а-яёa-z0-9]+/gi, '_').replace(/^_+|_+$/g, '').slice(0, 24),
+        avatar: clean.avatar || clean.name[0].toUpperCase(),
+        css: 'group-avatar',
+        style: 'custom',
+        prompt: clean.prompt,
+        about: clean.prompt.slice(0, 130),
+        status: 'Статус: персонаж из каталога'
+      };
+      saveCustomPersonas();
+      renderCatalog();
+      renderPersonaList?.();
+      return customPersonas[id];
+    }
+    function addImportedPlugin(payload) {
+      const clean = sanitizePluginPayload(payload);
+      if (!clean) { showToast('Код плагина повреждён'); return null; }
+      // Безопасность: чужой код всегда сохраняется ВЫКЛЮЧЕННЫМ
+      const existing = plugins.find(p => p.name === clean.name);
+      if (existing) { existing.code = clean.code; existing.enabled = false; stopPluginWorker(existing.id); }
+      else plugins.push({ id: uid(), name: clean.name, code: clean.code, enabled: false });
+      savePlugins(plugins);
+      renderPluginList();
+      return true;
+    }
+
+    // ---- Каталог персонажей ------------------------------------------------------------
+    const catalogGrid = document.getElementById('catalogGrid');
+    function personaChatId(personaId) { return personaId; }
+    function openPersonaChat(personaId) {
+      const id = personaChatId(personaId);
+      if (!chats[id]) {
+        setChats({ ...chats, [id]: { id, type: 'dm', members: [personaId], unread: 0, messages: [{ id: uid(), who: personaId, text: 'Привет. Я уже в чате и отвечаю по твоему промпту.', time: now() }] }, group: chats.group || defaultChats().group });
+        saveChats();
+      }
+      closePanels();
+      openChat(id);
+    }
+    function renderCatalog() {
+      if (!catalogGrid) return;
+      const cards = [];
+      const makeCard = (persona, isCustom) => {
+        const card = document.createElement('div');
+        card.className = 'catalog-card';
+        const head = document.createElement('div');
+        head.className = 'catalog-card-head';
+        const ava = document.createElement('div');
+        ava.className = 'avatar group-avatar catalog-ava';
+        ava.textContent = persona.avatar || persona.name[0];
+        const title = document.createElement('div');
+        title.innerHTML = `<div class="catalog-name"></div><div class="catalog-about"></div>`;
+        title.querySelector('.catalog-name').textContent = persona.name;
+        title.querySelector('.catalog-about').textContent = persona.about || persona.status || '';
+        head.append(ava, title);
+        const actions = document.createElement('div');
+        actions.className = 'catalog-actions';
+        const chatBtn = document.createElement('button');
+        chatBtn.type = 'button'; chatBtn.className = 'mini-action'; chatBtn.textContent = 'В чат';
+        bindTap(chatBtn, () => openPersonaChat(persona.id));
+        actions.append(chatBtn);
+        if (isCustom) {
+          const codeBtn = document.createElement('button');
+          codeBtn.type = 'button'; codeBtn.className = 'mini-action'; codeBtn.textContent = 'Код';
+          bindTap(codeBtn, async () => {
+            const code = await makeShareCode('persona', { name: persona.name, prompt: persona.prompt, avatar: persona.avatar });
+            const ok = await copyTextToClipboard(code);
+            showToast(ok ? `Код персонажа «${persona.name}» скопирован` : 'Скопируйте код вручную из консоли');
+          });
+          actions.append(codeBtn);
+          if (p2pConnected()) {
+            const sendBtn = document.createElement('button');
+            sendBtn.type = 'button'; sendBtn.className = 'mini-action'; sendBtn.textContent = '→P2P';
+            bindTap(sendBtn, () => {
+              try {
+                p2p.dc.send(JSON.stringify({ t: 'share', kind: 'persona', item: { name: persona.name, prompt: persona.prompt, avatar: persona.avatar } }));
+                showToast(`Персонаж отправлен собеседнику`);
+              } catch { showToast('Не удалось отправить'); }
+            });
+            actions.append(sendBtn);
+          }
+        }
+        card.append(head, actions);
+        return card;
+      };
+      Object.values(customPersonas).forEach(p => cards.push(makeCard(p, true)));
+      Object.values(builtInPersonas).forEach(p => cards.push(makeCard(p, false)));
+      catalogGrid.replaceChildren(...cards);
+      if (!cards.length) catalogGrid.innerHTML = '<div class="panel-subtitle">Пока пусто. Создайте персонажа через + → Свой персонаж.</div>';
+    }
+    appSetTimeout(maybeShowPatchNotes, 1600);
+    panelMap.catalog = document.getElementById('catalogPanel');
+    panelMap.patchnotes = document.getElementById('patchNotesPanel');
+    // Эти два диалога добавлены в panelMap ПОСЛЕ основного цикла навешивания обработчиков,
+    // поэтому закрытие (× / «Понятно» / backdrop / Esc) вешаем на них здесь же.
+    [panelMap.catalog, panelMap.patchnotes].forEach(layer => {
+      if (!layer) return;
+      layer.addEventListener('click', event => {
+        if (event.target.closest('[data-panel-close]')) { closeOverlay(); return; }
+        if (layer instanceof HTMLDialogElement && event.target === layer) { closeOverlay(); return; }
+        event.stopPropagation();
+      });
+      if (layer instanceof HTMLDialogElement) {
+        layer.addEventListener('cancel', event => { event.preventDefault(); closeOverlay(); });
+        layer.addEventListener('close', () => closeActivePanelFromDialog(layer));
+      }
+    });
+    bindTap(document.getElementById('openCatalogBtn'), () => { renderCatalog(); openPanel('catalog'); });
+    const catalogImportInput = document.getElementById('catalogImportInput');
+    catalogImportInput?.addEventListener('input', async () => {
+      const value = catalogImportInput.value.trim();
+      if (value.length < 24) return;
+      const data = await readShareCode(value);
+      if (!data) return;
+      if (data.k !== 'persona') { showToast('Это код не персонажа'); return; }
+      const persona = addImportedPersona(data.item);
+      if (persona) { catalogImportInput.value = ''; showToast(`Персонаж «${persona.name}» добавлен`); }
+    });
+
+    // ---- Импорт плагина по коду ---------------------------------------------------------
+    const pluginImportInput = document.getElementById('pluginImportInput');
+    pluginImportInput?.addEventListener('input', async () => {
+      const value = pluginImportInput.value.trim();
+      if (value.length < 24) return;
+      const data = await readShareCode(value);
+      if (!data) return;
+      if (data.k !== 'plugin') { showToast('Это код не плагина'); return; }
+      if (addImportedPlugin(data.item)) { pluginImportInput.value = ''; showToast('Плагин добавлен (выключен). Проверьте код перед включением.'); }
+    });
+
+    // ---- Приём share-посылок в P2P-чате (с подтверждением!) -----------------------------
+    function handleP2pShare(payload) {
+      const kind = payload?.kind;
+      if (kind === 'persona') {
+        const clean = sanitizePersonaPayload(payload.item);
+        if (!clean) return;
+        if (!confirm(`Собеседник прислал персонажа «${clean.name}». Добавить его в ваш каталог?`)) return;
+        const persona = addImportedPersona(clean);
+        if (persona) showToast(`Персонаж «${persona.name}» добавлен в каталог`);
+      } else if (kind === 'plugin') {
+        const clean = sanitizePluginPayload(payload.item);
+        if (!clean) return;
+        if (!confirm(`Собеседник прислал плагин «${clean.name}». Это исполняемый код: он будет сохранён ВЫКЛЮЧЕННЫМ, включайте только если доверяете. Принять?`)) return;
+        if (addImportedPlugin(clean)) showToast(`Плагин «${clean.name}» сохранён (выключен)`);
+      }
+    }
+
+    // ---- Упрощённый P2P: умное поле + авто-копирование ----------------------------------
+    async function p2pAutoCopy(code, label) {
+      const ok = await copyTextToClipboard(code);
+      showToast(ok ? `${label} скопирован — отправьте собеседнику` : 'Скопируйте код вручную');
+    }
+    async function p2pSmartApply(code) {
+      let data;
+      try { data = await p2pUnpack(code); } catch { return false; }
+      const sdpType = data?.sdp?.type;
+      if (sdpType === 'offer') {
+        // Нам прислали приглашение — автоматически становимся гостем
+        p2pStartJoin();
+        if (p2pEls.in) p2pEls.in.value = code;
+        await p2pApplyCode();
+        const answer = p2pEls.out?.value || '';
+        if (answer) await p2pAutoCopy(answer, 'Ответный код');
+        return true;
+      }
+      if (sdpType === 'answer') {
+        if (p2p.role !== 'host' || !p2p.pc) { showToast('Сначала создайте приглашение, затем вставьте ответ'); return true; }
+        if (p2pEls.in) p2pEls.in.value = code;
+        await p2pApplyCode();
+        return true;
+      }
+      return false;
+    }
+    // Умное поле: вставили код — он применяется сам, роль определяется автоматически
+    p2pEls.in?.addEventListener('input', async () => {
+      const value = (p2pEls.in.value || '').trim();
+      if (value.length < 40) return;
+      if (p2pEls.in.dataset.busy === '1') return;
+      p2pEls.in.dataset.busy = '1';
+      try {
+        const handled = await p2pSmartApply(value);
+        if (handled) p2pEls.in.value = '';
+      } finally { p2pEls.in.dataset.busy = '0'; }
+    });
 
 
     function renderInitialShell() {
