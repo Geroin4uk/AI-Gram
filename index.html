@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>AI-Gram</title>
-  <link rel="stylesheet" href="css/app.css?v=p9" />
+  <link rel="stylesheet" href="css/app.css?v=sh10" />
 </head>
 <body>
   <main class="phone" aria-label="Фейк Telegram">
@@ -44,7 +44,9 @@
           <button class="mini-action" id="openPersonaBtn" type="button" hidden>Свой персонаж</button>
           <button class="mini-action" id="autoChatBtn" type="button" hidden>Авто-диалог</button>
           <button class="mini-action" id="openP2pBtn" type="button" hidden>P2P-чат</button>
+          <button class="mini-action" id="openCatalogBtn" type="button" hidden>Каталог</button>
           <nav class="create-menu" id="createMenu" aria-label="Создать">
+            <button class="menu-item" type="button" data-create="openCatalogBtn"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><span>Каталог персонажей</span></button>
             <button class="menu-item" type="button" data-create="openPersonaBtn"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M20 8v6M23 11h-6"/></svg><span>Свой персонаж</span></button>
             <button class="menu-item" type="button" data-create="openP2pBtn"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><span>P2P-чат</span></button>
           </nav>
@@ -369,6 +371,7 @@
         <button class="settings-card" type="button" data-settings-open="api"><strong>Нейросеть</strong><span>провайдер и модель</span></button>
         <button class="settings-card" type="button" data-settings-open="persona"><strong>Персонажи</strong><span>создание и список</span></button>
         <button class="settings-card" type="button" data-settings-open="custom"><strong>Текущий чат</strong><span>персонаж и стиль ответа</span></button>
+        <button class="settings-card" type="button" data-settings-open="catalog"><strong>Каталог персонажей</strong><span>делиться и добавлять по коду</span></button>
         <button class="settings-card" type="button" data-settings-open="plugin"><strong>Плагины</strong><span>свои боты и скрипты</span></button>
         <button class="settings-card" type="button" data-settings-open="p2p"><strong>P2P-чат</strong><span>связь с реальным человеком</span></button>
         <button class="settings-card" type="button" data-settings-open="personal"><strong>Чаты и уведомления</strong><span>фон, звук, вибрация</span></button>
@@ -488,29 +491,54 @@
         <button class="custom-btn" id="pluginSaveBtn" type="button">Сохранить плагин</button>
         <button class="custom-btn" id="pluginClearFormBtn" type="button">Очистить форму</button>
       </div>
+      <div class="custom-section">
+        <label class="custom-label" for="pluginImportInput">Добавить плагин по коду</label>
+        <textarea class="custom-input p2p-code" id="pluginImportInput" rows="2" placeholder="Вставьте код плагина — он добавится выключенным"></textarea>
+        <div class="panel-subtitle">У каждого плагина есть кнопка «Код» для передачи другому человеку, а при активном P2P-чате — кнопка «→P2P» для отправки собеседнику напрямую. Чужие плагины всегда добавляются выключенными.</div>
+      </div>
+    </dialog>
+
+    <dialog class="custom-panel catalog-panel has-settings-back" id="catalogPanel" aria-label="Каталог персонажей">
+      <button class="panel-close-btn" type="button" data-panel-close aria-label="Закрыть">×</button>
+      <button class="settings-back-btn" type="button" data-settings-back>‹ Настройки</button>
+      <div class="panel-title">Каталог персонажей</div>
+      <div class="panel-subtitle">Ваши персонажи и встроенные. Кнопка «Код» копирует код персонажа — отправьте его любым способом, и другой человек добавит персонажа себе через поле ниже. Если открыт P2P-чат, персонажа можно переслать собеседнику напрямую.</div>
+      <div class="catalog-grid" id="catalogGrid"></div>
+      <div class="custom-section">
+        <label class="custom-label" for="catalogImportInput">Добавить по коду</label>
+        <textarea class="custom-input p2p-code" id="catalogImportInput" rows="2" placeholder="Вставьте код персонажа — он добавится автоматически"></textarea>
+      </div>
+    </dialog>
+
+    <dialog class="custom-panel patch-notes-panel" id="patchNotesPanel" aria-label="Что нового">
+      <button class="panel-close-btn" type="button" data-panel-close aria-label="Закрыть">×</button>
+      <div class="panel-title">Что нового</div>
+      <div class="panel-subtitle" id="patchNotesBuild"></div>
+      <div class="patch-notes-list" id="patchNotesList"></div>
+      <div class="custom-actions"><button class="custom-btn" type="button" data-panel-close>Понятно</button></div>
     </dialog>
 
     <dialog class="custom-panel p2p-panel has-settings-back" id="p2pPanel" aria-label="P2P-чат">
       <button class="panel-close-btn" type="button" data-panel-close aria-label="Закрыть">×</button>
       <button class="settings-back-btn" type="button" data-settings-back>‹ Настройки</button>
       <div class="panel-title">P2P-чат (WebRTC)</div>
-      <div class="panel-subtitle">Прямое зашифрованное соединение между двумя браузерами без сервера. Обменяйтесь кодами любым удобным способом (мессенджер, почта, QR). Данные существуют только на ваших устройствах и не сохраняются в истории.</div>
+      <div class="panel-subtitle">Прямое соединение двух браузеров без сервера — всего два шага: один создаёт код, второй вставляет. Коды применяются автоматически и копируются сами.</div>
       <div class="custom-actions">
-        <button class="custom-btn" id="p2pCreateBtn" type="button">Создать приглашение</button>
-        <button class="custom-btn" id="p2pJoinBtn" type="button">Присоединиться по коду</button>
+        <button class="custom-btn" id="p2pCreateBtn" type="button">Создать код и скопировать</button>
+      </div>
+      <div class="custom-section">
+        <label class="custom-label" id="p2pInLabel" for="p2pInCode">Или вставьте код собеседника</label>
+        <textarea class="custom-input p2p-code" id="p2pInCode" rows="3" placeholder="Код применится автоматически"></textarea>
       </div>
       <div class="p2p-signal is-hidden" id="p2pSignalBox">
         <div class="custom-section">
-          <label class="custom-label" id="p2pOutLabel" for="p2pOutCode">Ваш код</label>
+          <label class="custom-label" id="p2pOutLabel" for="p2pOutCode">Ваш код (уже в буфере — отправьте собеседнику)</label>
           <textarea class="custom-input p2p-code" id="p2pOutCode" rows="3" readonly></textarea>
-          <button class="custom-btn" id="p2pCopyBtn" type="button">Скопировать код</button>
-        </div>
-        <div class="custom-section">
-          <label class="custom-label" id="p2pInLabel" for="p2pInCode">Код собеседника</label>
-          <textarea class="custom-input p2p-code" id="p2pInCode" rows="3"></textarea>
-          <button class="custom-btn" id="p2pApplyBtn" type="button">Применить код</button>
+          <button class="custom-btn" id="p2pCopyBtn" type="button">Скопировать ещё раз</button>
         </div>
       </div>
+      <button class="custom-btn is-hidden" id="p2pJoinBtn" type="button" hidden>Присоединиться</button>
+      <button class="custom-btn is-hidden" id="p2pApplyBtn" type="button" hidden>Применить</button>
       <div class="panel-subtitle" id="p2pStatus">Создайте приглашение или присоединитесь по коду.</div>
       <div class="p2p-log" id="p2pLog" aria-live="polite"></div>
       <div class="p2p-compose">
@@ -598,6 +626,6 @@
     <div class="toast" id="toast"></div>
   </main>
 
-  <script src="js/app.js?v=p9"></script>
+  <script src="js/app.js?v=sh10"></script>
 </body>
 </html>
