@@ -1418,3 +1418,9 @@
     .patch-note-row::before { content: "✦"; position: absolute; left: 13px; top: 10px; color: var(--accent); }
     .patch-notes-panel { max-width: 480px; }
     /* =================== /Каталог + патч-ноуты =================== */
+
+    /* Облачный каталог */
+    .linklike { background: none; border: 0; color: var(--accent); cursor: pointer; font: inherit; padding: 0; text-decoration: underline; }
+    .cloud-config { margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 10px; }
+    .cloud-config summary { cursor: pointer; font-weight: 600; padding: 6px 0; color: var(--text); }
+    .cloud-config summary::marker { color: var(--accent); }

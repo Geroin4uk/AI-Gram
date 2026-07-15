@@ -100,6 +100,11 @@
     const saveApiBtn = document.getElementById('saveApiBtn');
     const googleGuideBtn = document.getElementById('googleGuideBtn');
     const persistApiKeyInput = document.getElementById('persistApiKeyInput');
+    const yandexSettingsExt = document.getElementById('yandexSettingsExt');
+    const yandexApiKeyInput = document.getElementById('yandexApiKeyInput');
+    const yandexFolderIdInput = document.getElementById('yandexFolderIdInput');
+    const yandexModelInput = document.getElementById('yandexModelInput');
+    const yandexPersistKeyInput = document.getElementById('yandexPersistKeyInput');
     const neuralSettingsExt = document.getElementById('neuralSettingsExt');
     const neuralBackendStatus = document.getElementById('neuralBackendStatus');
     const neuralModelInfo = document.getElementById('neuralModelInfo');
@@ -255,6 +260,28 @@
       try { if (value) sessionStorage.setItem('danilApiKeySession', value); } catch {}
     }
 
+    // Тот же паттерн хранения (сессия по умолчанию, постоянно — только с явным согласием),
+    // но под отдельными ключами, чтобы не трогать уже сохранённые ключи Google AI.
+    function getPersistedYandexKey() {
+      try {
+        if (storageGet('danilYandexApiKeyPersisted', 'false') === 'true') return storageGet('danilYandexApiKey', '');
+        return sessionStorage.getItem('danilYandexApiKeySession') || '';
+      } catch {
+        return storageGet('danilYandexApiKeyPersisted', 'false') === 'true' ? storageGet('danilYandexApiKey', '') : '';
+      }
+    }
+    function setPersistedYandexKey(value, persist) {
+      try { sessionStorage.removeItem('danilYandexApiKeySession'); } catch {}
+      if (value && persist) {
+        storageSet('danilYandexApiKey', value);
+        storageSet('danilYandexApiKeyPersisted', 'true');
+        return;
+      }
+      storageRemove('danilYandexApiKey');
+      storageSet('danilYandexApiKeyPersisted', 'false');
+      try { if (value) sessionStorage.setItem('danilYandexApiKeySession', value); } catch {}
+    }
+
     const APP_LIMITS = Object.freeze({
       replyPreview: 50,
       maxMessagesPerChat: 220,
@@ -282,11 +309,16 @@
       autoMaxSeconds: 8
     });
     const API_CONFIG = Object.freeze({
-      providers: Object.freeze({ local: 'Локально', neural: 'Локальная LLM (браузер)', gemma: 'Google AI Studio' }),
+      providers: Object.freeze({ local: 'Локально', neural: 'Локальная LLM (браузер)', gemma: 'Google AI Studio', yandex: 'Yandex Cloud' }),
       defaultProvider: 'local',
       defaultModel: 'gemini-3.1-flash-lite',
       geminiBaseUrl: 'https://generativelanguage.googleapis.com/v1beta/models',
-      modelPattern: /[^a-z0-9._:-]/gi
+      yandexBaseUrl: 'https://llm.api.cloud.yandex.net/foundationModels/v1/completion',
+      defaultYandexModel: 'yandexgpt/latest',
+      // Bug fix: the slash wasn't allowed here, so Yandex model IDs like "yandexgpt-lite/latest"
+      // silently lost their slash and became "yandexgpt-litelatest" (invalid modelUri). Gemini
+      // model names never contain a slash, so this was harmless for that provider until now.
+      modelPattern: /[^a-z0-9._:/-]/gi
     });
     // In-browser LLM ("smart local model"), separate from the rule-based `local` provider above.
     // Auto-picks WebGPU (faster, bigger model) when available, otherwise falls back to a
@@ -324,8 +356,14 @@
     const savedAiProvider = storageGet('danilAiProvider', API_CONFIG.defaultProvider);
     let aiProvider = Object.keys(API_CONFIG.providers).includes(savedAiProvider) ? savedAiProvider : API_CONFIG.defaultProvider;
     let apiKey = envGet('GEMINI_API_KEY') || envGet('GOOGLE_AI_API_KEY') || getPersistedApiKey();
-    storageRemove('danilApiKey');
+    // Bug fix: this used to unconditionally wipe the persisted key from storage right after
+    // reading it, so "remember key" survived exactly one reload and then silently broke —
+    // the checkbox stayed checked but the key kept disappearing. getPersistedApiKey() already
+    // gates raw access behind the persisted flag, so no extra scrub is needed here.
     let apiModel = String(storageGet('danilApiModel', API_CONFIG.defaultModel)).replace(API_CONFIG.modelPattern, '').slice(0, 80) || API_CONFIG.defaultModel;
+    let yandexApiKey = envGet('YANDEX_API_KEY') || getPersistedYandexKey();
+    let yandexFolderId = safeText(storageGet('danilYandexFolderId', ''), '', 60);
+    let yandexModel = String(storageGet('danilYandexModel', API_CONFIG.defaultYandexModel)).replace(API_CONFIG.modelPattern, '').slice(0, 80) || API_CONFIG.defaultYandexModel;
     AppContext.setApiConfig({ aiProvider, apiKey, apiModel });
 
     const DEFAULT_CUSTOMS = {
@@ -348,7 +386,7 @@
       en: { message: 'Message', online: 'online', offline: 'Offline — outgoing messages will be queued until connection returns' },
       uk: { message: 'Повідомлення', online: 'у мережі', offline: 'Немає мережі — вихідні повідомлення буде надіслано після відновлення з’єднання' }
     });
-    const BACKUP_KEYS = ['aiPersonaChats', 'personaCustomSettings', 'danilCustomSettings', 'customAiPersonas', 'aiChatUiSettings', 'danilTheme', 'danilThemeAnimated', 'danilThemeGlass', 'danilCustomTheme', 'danilAiProvider', 'danilApiModel', 'messengerUserProfile', 'aiPlugins', 'aiMemoryEnabled', 'aiVoiceDsp'];
+    const BACKUP_KEYS = ['aiPersonaChats', 'personaCustomSettings', 'danilCustomSettings', 'customAiPersonas', 'aiChatUiSettings', 'danilTheme', 'danilThemeAnimated', 'danilThemeGlass', 'danilCustomTheme', 'danilAiProvider', 'danilApiModel', 'danilYandexFolderId', 'danilYandexModel', 'messengerUserProfile', 'aiPlugins', 'aiMemoryEnabled', 'aiVoiceDsp'];
     const SAFE_AI_PROVIDERS = new Set(Object.keys(API_CONFIG.providers));
     const SAFE_PERSONA_STYLES = new Set(Object.keys(STYLE_LABELS));
 
@@ -2685,7 +2723,13 @@
     function buildGeminiHistory(chat, persona, userText, imageData = null) {
       const profile = loadUserProfile() || {};
       const userName = profile.name || 'Пользователь';
-      const history = chat.messages.slice(-APP_LIMITS.maxAiContextMessages).filter(message => message.text || message.image || message.kind).map(message => ({ role: isOwnMessage(message.who) ? 'user' : 'model', parts: [{ text: messageTextForAi(message) }] }));
+      // Bug fix: this used to mark every non-human message as role:'model', so in group
+      // chats with several AI personas the API was told it had personally said lines that
+      // actually belonged to a *different* character — a real cause of confused, self-
+      // contradicting, or off-character replies. Now only the persona actually generating
+      // this reply gets 'model'; every other speaker (human or other bot) is 'user', with
+      // messageTextForAi's name prefix making clear who really said it.
+      const history = chat.messages.slice(-APP_LIMITS.maxAiContextMessages).filter(message => message.text || message.image || message.kind).map(message => ({ role: message.who === persona.id ? 'model' : 'user', parts: [{ text: messageTextForAi(message) }] }));
       const last = history.at(-1);
       if (!last || last.role !== 'user' || !last.parts?.[0]?.text?.includes(userText)) history.push({ role: 'user', parts: [{ text: `${userName}: ${userText}` }] });
       const image = splitDataUrl(imageData);
@@ -2863,7 +2907,7 @@
       if (!confirm(CONFIRM_MESSAGES.resetAll)) return;
       stopAutoChat();
       clearAppTimers();
-      ['aiPersonaChats','aiPersonaChatsEncrypted','aiMessengerEncryptionSecret','customAiPersonas','personaCustomSettings','danilCustomSettings','aiChatUiSettings','danilApiKeyPersisted','danilAiProvider','danilApiKey','danilApiModel','danilTheme','danilThemeAnimated','danilThemeGlass','danilCustomTheme','messengerUserProfile','aiReplyCache','aiPlugins','aiMemoryEnabled','aiVoiceDsp'].forEach(key => storageRemove(key));
+      ['aiPersonaChats','aiPersonaChatsEncrypted','aiMessengerEncryptionSecret','customAiPersonas','personaCustomSettings','danilCustomSettings','aiChatUiSettings','danilApiKeyPersisted','danilAiProvider','danilApiKey','danilApiModel','danilYandexApiKey','danilYandexApiKeyPersisted','danilYandexFolderId','danilYandexModel','danilTheme','danilThemeAnimated','danilThemeGlass','danilCustomTheme','messengerUserProfile','aiReplyCache','aiPlugins','aiMemoryEnabled','aiVoiceDsp'].forEach(key => storageRemove(key));
       try {
         sessionStorage.removeItem('danilApiKey');
         sessionStorage.removeItem('danilApiKeySession');
@@ -2872,7 +2916,7 @@
       } catch {}
       try { await clearChatsDb(); } catch {}
       clearAiReplyCache();
-      aiProvider = API_CONFIG.defaultProvider; apiKey = ''; apiModel = API_CONFIG.defaultModel; AppContext.setApiConfig({ aiProvider, apiKey, apiModel }); customSettings = loadCustomSettings(); custom = customSettings.danil; customPersonas = {}; Object.keys(builtInPersonas).forEach(syncBuiltInPersona); personas = { ...builtInPersonas };
+      aiProvider = API_CONFIG.defaultProvider; apiKey = ''; apiModel = API_CONFIG.defaultModel; yandexApiKey = ''; yandexFolderId = ''; yandexModel = API_CONFIG.defaultYandexModel; AppContext.setApiConfig({ aiProvider, apiKey, apiModel }); customSettings = loadCustomSettings(); custom = customSettings.danil; customPersonas = {}; Object.keys(builtInPersonas).forEach(syncBuiltInPersona); personas = { ...builtInPersonas };
       setChats(defaultChats()); activeChatId = 'danil'; setActiveChatId('danil'); activeCustomPersonaId = 'danil'; uiSettings = loadUiSettings(); AppContext.setUiSettings(uiSettings);
       registrationNameInput.value = '';
       registrationHandleInput.value = '';
@@ -2888,7 +2932,9 @@
 
     function openApiPanel() {
       openPanel('api');
-      aiProviderSelect.value = aiProvider; apiKeyInput.value = apiKey ? '••••••••' : ''; apiModelInput.value = apiModel; persistApiKeyInput.checked = storageGet('danilApiKeyPersisted', 'false') === 'true'; toggleApiExt();
+      aiProviderSelect.value = aiProvider; apiKeyInput.value = apiKey ? '••••••••' : ''; apiModelInput.value = apiModel; persistApiKeyInput.checked = storageGet('danilApiKeyPersisted', 'false') === 'true';
+      yandexApiKeyInput.value = yandexApiKey ? '••••••••' : ''; yandexFolderIdInput.value = yandexFolderId; yandexModelInput.value = yandexModel; yandexPersistKeyInput.checked = storageGet('danilYandexApiKeyPersisted', 'false') === 'true';
+      toggleApiExt();
     }
 
     function openApiGuidePanel() {
@@ -2913,6 +2959,12 @@
       apiKeyInput.disabled = !show;
       apiModelInput.disabled = !show;
       persistApiKeyInput.disabled = !show;
+      const showYandex = aiProviderSelect.value === 'yandex';
+      yandexSettingsExt.classList.toggle('is-hidden', !showYandex);
+      yandexApiKeyInput.disabled = !showYandex;
+      yandexFolderIdInput.disabled = !showYandex;
+      yandexModelInput.disabled = !showYandex;
+      yandexPersistKeyInput.disabled = !showYandex;
       const showNeural = aiProviderSelect.value === 'neural';
       neuralSettingsExt.classList.toggle('is-hidden', !showNeural);
       if (showNeural) renderNeuralStatus();
@@ -2929,10 +2981,18 @@
       if (persistApiKeyInput.checked && apiKey && !confirm('Сохранить API-ключ в браузере после выхода? Это небезопасно на чужом устройстве.')) persistApiKeyInput.checked = false;
       setPersistedApiKey(apiKey, persistApiKeyInput.checked);
       storageSet('danilAiProvider', aiProvider); storageSet('danilApiModel', apiModel);
+      yandexApiKey = yandexApiKeyInput.value === '••••••••' ? yandexApiKey : safeText(yandexApiKeyInput.value, '', 200);
+      yandexFolderId = safeText(yandexFolderIdInput.value, '', 60);
+      yandexModel = String(yandexModelInput.value || API_CONFIG.defaultYandexModel).replace(API_CONFIG.modelPattern, '').slice(0, 80) || API_CONFIG.defaultYandexModel;
+      if (yandexPersistKeyInput.checked && yandexApiKey && !confirm('Сохранить API-ключ Yandex Cloud в браузере после выхода? Это небезопасно на чужом устройстве.')) yandexPersistKeyInput.checked = false;
+      setPersistedYandexKey(yandexApiKey, yandexPersistKeyInput.checked);
+      storageSet('danilYandexFolderId', yandexFolderId); storageSet('danilYandexModel', yandexModel);
       clearAiReplyCache();
       AppContext.setApiConfig({ aiProvider, apiKey, apiModel });
       updateAiMenuLabel(); closeOverlay();
-      showToast(aiProvider === 'gemma' && !apiKey ? 'Выбран Google AI, но ключ не введён' : 'Настройки нейросети сохранены');
+      if (aiProvider === 'gemma' && !apiKey) showToast('Выбран Google AI, но ключ не введён');
+      else if (aiProvider === 'yandex' && (!yandexApiKey || !yandexFolderId)) showToast('Выбран Yandex Cloud, но не заполнены ключ и/или ID каталога');
+      else showToast('Настройки нейросети сохранены');
     });
 
     // Small quantized instruct models (especially the 0.5B WASM fallback) sometimes ignore
@@ -2949,7 +3009,11 @@
       /i cannot (?:personally )?chat/i,
       /обратитесь (?:в поддержку|к (?:другому )?(?:чат-?боту|ии-?боту))/i,
       /не могу притворяться/i,
-      /я не (?:являюсь|человек)/i
+      /я не (?:являюсь|человек)/i,
+      // Дополнительные типичные «сбросы персонажа», из-за которых ответ выглядит роботизированным
+      /у меня нет (?:чувств|эмоций|личного мнения|тела)/i,
+      /как (?:бы )?(?:это )?(?:ни было|там ни было),\s*я(?:,)? (?:программа|бот|нейросеть)/i,
+      /я не могу испытывать/i
     ];
     function isModelRefusal(text) {
       return !text || MODEL_REFUSAL_PATTERNS.some(pattern => pattern.test(text));
@@ -2983,7 +3047,8 @@
         ? `\nФакты и моменты из прошлых разговоров (используй естественно, если уместно, не цитируй списком):\n${memoryContext}`
         : '';
       return `Ты играешь живого персонажа по имени ${persona.name} в Telegram. Стиль: ${style}. ${userLine} ${groupRule}${memoryBlock}
-Пиши на ${replyLanguage} языке, коротко (обычно 1-2 предложения, не длиннее ${APP_LIMITS.maxAiReplyLength} символов) и естественно. Если тебе передали изображение, реально опиши или прокомментируй то, что видишь. Не говори, что ты ИИ или бот. Не повторяй одну и ту же фразу из прошлых сообщений; меняй формулировки, длину и интонацию. Пиши как живой собеседник: конкретно, спокойно, без шаблонных вступлений и канцелярита. Не обрывай мысль на середине — если не укладываешься, сократи содержание, а не предложение. Верни только одно сообщение без имени, кавычек и пояснений.`;
+Пиши на ${replyLanguage} языке, коротко (обычно 1-2 предложения, не длиннее ${APP_LIMITS.maxAiReplyLength} символов) и естественно. Если тебе передали изображение, реально опиши или прокомментируй то, что видишь. Не говори, что ты ИИ или бот. Не повторяй одну и ту же фразу из прошлых сообщений; меняй формулировки, длину и интонацию. Пиши как живой собеседник: конкретно, спокойно, без шаблонных вступлений и канцелярита. Не обрывай мысль на середине — если не укладываешься, сократи содержание, а не предложение. Верни только одно сообщение без имени, кавычек и пояснений.
+Избегай типичных «ИИ-ответных» привычек: не начинай с дежурного вступления вроде «Конечно!», «Отлично!», «Хороший вопрос», не пересказывай вопрос собеседника перед ответом, не извиняйся без повода. Не заканчивай каждую реплику вопросом «в лоб», лишь бы поддержать разговор — задавай вопрос только тогда, когда персонажу правда интересно или уместно. Никогда не используй списки, нумерацию, заголовки или markdown-разметку — это переписка в мессенджере, а не документ. Пиши как реально печатают люди: можно фрагментами, без канцелярских оборотов и лишней вежливости, с обычной живой интонацией персонажа — а не ровным, услужливым тоном помощника.`;
     }
 
     function splitDataUrl(dataUrl) {
@@ -3111,6 +3176,54 @@
       // phrase used to be written into the AI cache under the API cache key — every
       // later identical prompt then got the same canned line back "from the API".
       // Only cache genuine model output.
+      const cleaned = cleanAiReply(raw, persona);
+      if (cleaned) {
+        setAiCacheValue(cacheKey, cleaned);
+        return cleaned;
+      }
+      return getLocalReply(userText, persona, chat);
+    }
+
+    // Формат сообщений Yandex Cloud Foundation Models: {role: 'system'|'user'|'assistant', text}.
+    // Роль ассистента ставится ТОЛЬКО тем сообщениям, которые написал именно этот персонаж —
+    // иначе в групповом чате модель решит, что она сама произносила чужие реплики (см. тот же
+    // фикс идентичности в buildGeminiHistory/neuralChatMessages).
+    function buildYandexMessages(chat, persona, userText) {
+      const profile = loadUserProfile() || {};
+      const userName = profile.name || 'Пользователь';
+      const history = chat.messages.slice(-APP_LIMITS.maxAiContextMessages)
+        .filter(message => message.text || message.kind)
+        .map(message => ({ role: message.who === persona.id ? 'assistant' : 'user', text: messageTextForAi(message) }));
+      const last = history.at(-1);
+      if (!last || last.role !== 'user' || !last.text?.includes(userText)) history.push({ role: 'user', text: `${userName}: ${userText}` });
+      return [{ role: 'system', text: buildSystemPrompt(persona, chat) }, ...history];
+    }
+
+    async function getYandexReply(userText, persona, chat, imageData = null, signal = null) {
+      if (!yandexApiKey || !yandexFolderId) throw new Error('Не заполнены API-ключ и/или ID каталога Yandex Cloud');
+      const model = yandexModel || API_CONFIG.defaultYandexModel;
+      const cacheKey = `aiCache:yandex:${model}:${yandexApiKey.slice(0, 8)}:${persona.id}:${userText.slice(0, 180)}`;
+      const cached = getAiCacheValue(cacheKey);
+      if (cached) return cached;
+      // Text-only API: изображение не отправляется, но модель хотя бы знает, что оно было.
+      const effectiveText = imageData ? `${userText}\n[к сообщению приложено изображение — опиши, что мог бы прокомментировать по контексту]` : userText;
+      const res = await fetchWithRetry(API_CONFIG.yandexBaseUrl, {
+        method: 'POST',
+        signal,
+        headers: { 'Content-Type': 'application/json', Authorization: `Api-Key ${yandexApiKey}`, 'x-folder-id': yandexFolderId },
+        body: JSON.stringify({
+          modelUri: `gpt://${yandexFolderId}/${model}`,
+          completionOptions: { stream: false, temperature: persona.id === 'yarik' ? 0.72 : 0.68, maxTokens: String(APP_LIMITS.maxAiReplyLength * 2) },
+          messages: buildYandexMessages(chat, persona, effectiveText)
+        })
+      });
+      if (!res.ok) {
+        let data = null;
+        try { data = await res.json(); } catch { data = null; }
+        throw new Error(apiErrorMessage('Yandex Cloud', res.status, { error: { message: data?.message || data?.error?.message } }));
+      }
+      const data = await res.json().catch(() => null);
+      const raw = data?.result?.alternatives?.[0]?.message?.text || '';
       const cleaned = cleanAiReply(raw, persona);
       if (cleaned) {
         setAiCacheValue(cacheKey, cleaned);
@@ -3550,9 +3663,11 @@
     }
 
     function neuralChatMessages(userText, persona, chat) {
+      // Тот же фикс идентичности, что и в buildGeminiHistory: ассистентом помечаем только
+      // сообщения именно этого персонажа, а не любого не-человека.
       const history = chat.messages.slice(-APP_LIMITS.maxAiContextMessages)
         .filter(message => message.text || message.kind)
-        .map(message => ({ role: isOwnMessage(message.who) ? 'user' : 'assistant', content: messageTextForAi(message) }));
+        .map(message => ({ role: message.who === persona.id ? 'assistant' : 'user', content: messageTextForAi(message) }));
       const profile = loadUserProfile() || {};
       const last = history.at(-1);
       if (!last || last.role !== 'user' || !last.content.includes(userText)) history.push({ role: 'user', content: `${profile.name || 'Пользователь'}: ${userText}` });
@@ -3588,6 +3703,10 @@
       switch (aiProvider) {
         case 'gemma':
           return getGemmaReply(userText, persona, chat, imageData, signal, onChunk);
+        case 'yandex':
+          // Синхронный (нестриминговый) режим Yandex Cloud — onChunk не вызывается,
+          // вызывающий код сам покажет финальный текст печатающим эффектом.
+          return getYandexReply(userText, persona, chat, imageData, signal);
         case 'neural':
           return getNeuralReply(userText, persona, chat, signal);
         case 'local':
@@ -3938,7 +4057,7 @@
       // Bug fix: everything used to be queued offline, although only the Gemma provider
       // actually needs the network — local phrases and a loaded in-browser model answer
       // fine without a connection.
-      if (!navigator.onLine && aiProvider === 'gemma') { offlineQueue.push({ chatId: activeChatId, text }); showToast('Нет сети: ответ ИИ придёт после восстановления связи'); return; }
+      if (!navigator.onLine && (aiProvider === 'gemma' || aiProvider === 'yandex')) { offlineQueue.push({ chatId: activeChatId, text }); showToast('Нет сети: ответ ИИ придёт после восстановления связи'); return; }
       scheduleAiReplies(text);
     }
 
@@ -4346,13 +4465,17 @@
           apiKeyInput.value = apiKey ? '••••••••' : '';
           apiModelInput.value = apiModel;
           persistApiKeyInput.checked = storageGet('danilApiKeyPersisted', 'false') === 'true';
+          yandexApiKeyInput.value = yandexApiKey ? '••••••••' : '';
+          yandexFolderIdInput.value = yandexFolderId;
+          yandexModelInput.value = yandexModel;
+          yandexPersistKeyInput.checked = storageGet('danilYandexApiKeyPersisted', 'false') === 'true';
           toggleApiExt();
         });
       }
       if (action === 'persona') switchSettingsPanel('persona', renderPersonaList);
       if (action === 'plugin') switchSettingsPanel('plugin', renderPluginList);
       if (action === 'p2p') switchSettingsPanel('p2p');
-      if (action === 'catalog') switchSettingsPanel('catalog', renderCatalog);
+      if (action === 'catalog') switchSettingsPanel('catalog', () => { renderCatalog(); refreshCloudCatalog(); });
       if (action === 'custom') {
         const personaId = editablePersonaIdFromChat() || 'danil';
         if (!builtInPersonas[personaId]) { showToast('Кастомизация доступна в личном чате Данила или Ярика'); return; }
@@ -5752,7 +5875,7 @@
       { id: 'app:p2p', icon: '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>', label: 'P2P-чат', hint: 'связь с человеком' }
     );
     // Штамп сборки — чтобы сразу видеть, что загружена свежая версия (а не старый кеш).
-    const AIGRAM_BUILD = 'share-hub-10';
+    const AIGRAM_BUILD = 'yandex-provider-12';
     try {
       console.log('%cAI-Gram build: ' + AIGRAM_BUILD, 'color:#2aabee;font-weight:bold');
       const stampHost = document.querySelector('#uiPanel .settings-shortcuts');
@@ -5845,6 +5968,18 @@
 
     // ---- Патч-ноуты: показываются один раз при первом входе в новую сборку ----------
     const AIGRAM_CHANGELOG = {
+      'yandex-provider-12': [
+        'Новый провайдер ИИ: Yandex Cloud (YandexGPT / Alice AI) — настраивается в «Настройки → Нейросеть»',
+        'Групповые чаты: исправлена путаница личности между персонажами — раньше ИИ иногда думал, что сам сказал чужую реплику',
+        'Системный промпт ужесточён против «ИИ-штампов»: меньше дежурных вступлений, меньше вопросов «для галочки», никаких списков в переписке',
+        'Починен баг с сохранением API-ключа Google AI: раньше «запомнить ключ» переживало только одну перезагрузку'
+      ],
+      'cloud-catalog-11': [
+        'Облачный каталог персонажей: публикуйте своих и добавляйте чужих одной кнопкой (Supabase)',
+        '«☁ В облако» — выложить персонажа, «Добавить» — забрать из общего каталога',
+        'Настройка облака в «Каталог → Настройка облака»; подробная PDF-инструкция в комплекте',
+        'Работает и без облака — тогда каталог остаётся локальным, как раньше'
+      ],
       'share-hub-10': [
         'P2P-подключение стало проще: одно поле, коды применяются и копируются автоматически',
         'Каталог персонажей: делитесь своими персонажами кодом и добавляйте чужих (+ → Каталог)',
@@ -5953,6 +6088,113 @@
       closePanels();
       openChat(id);
     }
+    // ==================================================================================
+    // Облачный каталог персонажей (Supabase REST / PostgREST). Конфиг задаёт пользователь
+    // в настройках; anon-ключ публичный по дизайну Supabase (доступ ограничивают RLS).
+    // ==================================================================================
+    const cloudCatalog = {
+      url: String(storageGet('catalogCloudUrl', '')).replace(/\/+$/, ''),
+      key: String(storageGet('catalogCloudKey', '')),
+      items: [],
+      status: 'idle'
+    };
+    function cloudConfigured() { return !!(cloudCatalog.url && cloudCatalog.key); }
+    function cloudHeaders(extra = {}) {
+      return { apikey: cloudCatalog.key, Authorization: `Bearer ${cloudCatalog.key}`, ...extra };
+    }
+    function cloudEndpoint(path) { return `${cloudCatalog.url}/rest/v1/${path}`; }
+
+    async function cloudFetchPersonas() {
+      if (!cloudConfigured()) return [];
+      const url = cloudEndpoint('personas?select=id,name,avatar,prompt,about,author,created_at&order=created_at.desc&limit=100');
+      const res = await fetch(url, { headers: cloudHeaders() });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      return (Array.isArray(data) ? data : [])
+        .map(row => ({
+          cloudId: row.id,
+          name: String(row.name || '').slice(0, 40),
+          avatar: String(row.avatar || '').slice(0, 4),
+          prompt: String(row.prompt || '').slice(0, 2000),
+          about: String(row.about || '').slice(0, 140),
+          author: String(row.author || '').slice(0, 40)
+        }))
+        .filter(p => p.name && p.prompt);
+    }
+
+    async function cloudPublishPersona(persona) {
+      if (!cloudConfigured()) { showToast('Сначала настройте облако в «Каталог → Облако»'); return false; }
+      const profile = loadUserProfile();
+      const body = {
+        name: String(persona.name || '').slice(0, 40),
+        avatar: String(persona.avatar || '').slice(0, 4),
+        prompt: String(persona.prompt || '').slice(0, 2000),
+        about: String(persona.about || persona.prompt || '').slice(0, 140),
+        author: String(profile?.name || 'аноним').slice(0, 40)
+      };
+      if (!body.name || !body.prompt) { showToast('У персонажа должны быть имя и промпт'); return false; }
+      const res = await fetch(cloudEndpoint('personas'), {
+        method: 'POST',
+        headers: cloudHeaders({ 'Content-Type': 'application/json', Prefer: 'return=minimal' }),
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        logSafe('cloud publish failed', { code: res.status });
+        showToast(res.status === 401 || res.status === 403 ? 'Облако отклонило запрос — проверьте ключ и RLS-политику INSERT' : `Не удалось опубликовать (HTTP ${res.status})`);
+        return false;
+      }
+      showToast(`«${body.name}» опубликован в облаке`);
+      return true;
+    }
+
+    async function cloudTestConnection() {
+      if (!cloudConfigured()) { showToast('Заполните URL и anon-ключ'); return; }
+      try {
+        const res = await fetch(cloudEndpoint('personas?select=id&limit=1'), { headers: cloudHeaders() });
+        if (res.ok) showToast('Облако подключено ✓');
+        else showToast(res.status === 404 ? 'Таблица personas не найдена — создайте её по инструкции' : `Ошибка облака: HTTP ${res.status}`);
+      } catch (e) { showToast('Нет связи с облаком (проверьте URL/сеть)'); }
+    }
+
+    // --- UI настроек облака ---
+    const cloudEls = {
+      url: document.getElementById('catalogCloudUrl'),
+      key: document.getElementById('catalogCloudKey'),
+      save: document.getElementById('catalogCloudSave'),
+      test: document.getElementById('catalogCloudTest'),
+      status: document.getElementById('catalogCloudStatus')
+    };
+    function refreshCloudStatus() {
+      if (!cloudEls.status) return;
+      cloudEls.status.textContent = cloudConfigured() ? 'Облако настроено. Каталог будет подтягивать общие персонажи.' : 'Облако не настроено — каталог работает только локально.';
+    }
+    if (cloudEls.url) cloudEls.url.value = cloudCatalog.url;
+    if (cloudEls.key) cloudEls.key.value = cloudCatalog.key;
+    bindTap(cloudEls.save, () => {
+      cloudCatalog.url = String(cloudEls.url?.value || '').trim().replace(/\/+$/, '');
+      cloudCatalog.key = String(cloudEls.key?.value || '').trim();
+      storageSet('catalogCloudUrl', cloudCatalog.url);
+      storageSet('catalogCloudKey', cloudCatalog.key);
+      cloudCatalog.items = [];
+      refreshCloudStatus();
+      showToast('Настройки облака сохранены');
+      renderCatalog();
+    });
+    bindTap(cloudEls.test, cloudTestConnection);
+    bindTap(document.getElementById('catalogCloudRefresh'), refreshCloudCatalog);
+    refreshCloudStatus();
+
+    async function refreshCloudCatalog() {
+      if (!cloudConfigured()) return;
+      cloudCatalog.status = 'loading';
+      renderCatalog();
+      try { cloudCatalog.items = await cloudFetchPersonas(); cloudCatalog.status = 'ready'; }
+      catch (e) { cloudCatalog.status = 'error'; logSafe('cloud fetch failed', { code: e.message?.slice(0, 20) }); }
+      renderCatalog();
+    }
+
+
     function renderCatalog() {
       if (!catalogGrid) return;
       const cards = [];
@@ -5984,6 +6226,10 @@
             showToast(ok ? `Код персонажа «${persona.name}» скопирован` : 'Скопируйте код вручную из консоли');
           });
           actions.append(codeBtn);
+          const publishBtn = document.createElement('button');
+          publishBtn.type = 'button'; publishBtn.className = 'mini-action'; publishBtn.textContent = '☁ В облако';
+          bindTap(publishBtn, async () => { if (await cloudPublishPersona(persona)) refreshCloudCatalog(); });
+          actions.append(publishBtn);
           if (p2pConnected()) {
             const sendBtn = document.createElement('button');
             sendBtn.type = 'button'; sendBtn.className = 'mini-action'; sendBtn.textContent = '→P2P';
@@ -6003,6 +6249,44 @@
       Object.values(builtInPersonas).forEach(p => cards.push(makeCard(p, false)));
       catalogGrid.replaceChildren(...cards);
       if (!cards.length) catalogGrid.innerHTML = '<div class="panel-subtitle">Пока пусто. Создайте персонажа через + → Свой персонаж.</div>';
+
+      // Облачные персонажи (общие для всех, у кого настроено то же облако)
+      const cloudGrid = document.getElementById('catalogCloudGrid');
+      if (cloudGrid) {
+        if (!cloudConfigured()) {
+          cloudGrid.innerHTML = '<div class="panel-subtitle">Облако не настроено. Откройте «Облако» ниже и вставьте данные Supabase, чтобы видеть и публиковать общих персонажей.</div>';
+        } else if (cloudCatalog.status === 'loading') {
+          cloudGrid.innerHTML = '<div class="panel-subtitle">Загрузка облачного каталога…</div>';
+        } else if (cloudCatalog.status === 'error') {
+          cloudGrid.innerHTML = '<div class="panel-subtitle">Не удалось загрузить облако. Проверьте настройки и нажмите «Обновить».</div>';
+        } else if (!cloudCatalog.items.length) {
+          cloudGrid.innerHTML = '<div class="panel-subtitle">В облаке пока нет персонажей. Опубликуйте своего кнопкой «☁ В облако».</div>';
+        } else {
+          const cloudCards = cloudCatalog.items.map(item => {
+            const card = document.createElement('div');
+            card.className = 'catalog-card';
+            const head = document.createElement('div');
+            head.className = 'catalog-card-head';
+            const ava = document.createElement('div');
+            ava.className = 'avatar group-avatar catalog-ava';
+            ava.textContent = item.avatar || item.name[0];
+            const title = document.createElement('div');
+            title.innerHTML = '<div class="catalog-name"></div><div class="catalog-about"></div>';
+            title.querySelector('.catalog-name').textContent = item.name;
+            title.querySelector('.catalog-about').textContent = item.about || (item.author ? `от ${item.author}` : '');
+            head.append(ava, title);
+            const acts = document.createElement('div');
+            acts.className = 'catalog-actions';
+            const add = document.createElement('button');
+            add.type = 'button'; add.className = 'mini-action'; add.textContent = 'Добавить';
+            bindTap(add, () => { const persona = addImportedPersona(item); if (persona) showToast(`«${persona.name}» добавлен из облака`); });
+            acts.append(add);
+            card.append(head, acts);
+            return card;
+          });
+          cloudGrid.replaceChildren(...cloudCards);
+        }
+      }
     }
     appSetTimeout(maybeShowPatchNotes, 1600);
     panelMap.catalog = document.getElementById('catalogPanel');
@@ -6021,7 +6305,7 @@
         layer.addEventListener('close', () => closeActivePanelFromDialog(layer));
       }
     });
-    bindTap(document.getElementById('openCatalogBtn'), () => { renderCatalog(); openPanel('catalog'); });
+    bindTap(document.getElementById('openCatalogBtn'), () => { renderCatalog(); openPanel('catalog'); refreshCloudCatalog(); });
     const catalogImportInput = document.getElementById('catalogImportInput');
     catalogImportInput?.addEventListener('input', async () => {
       const value = catalogImportInput.value.trim();

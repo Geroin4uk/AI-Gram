@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://generativelanguage.googleapis.com https://huggingface.co https://*.huggingface.co https://hf.co https://*.hf.co https://raw.githubusercontent.com https://cdn.jsdelivr.net https://esm.run; img-src 'self' data: blob: https:; media-src 'self' blob:; style-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://esm.run https://cdn.jsdelivr.net; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; manifest-src 'self'; upgrade-insecure-requests" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://generativelanguage.googleapis.com https://huggingface.co https://*.huggingface.co https://hf.co https://*.hf.co https://raw.githubusercontent.com https://cdn.jsdelivr.net https://esm.run https://*.supabase.co https://llm.api.cloud.yandex.net; img-src 'self' data: blob: https:; media-src 'self' blob:; style-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://esm.run https://cdn.jsdelivr.net; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; manifest-src 'self'; upgrade-insecure-requests" />
   <meta name="theme-color" content="#0e1621" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>AI-Gram</title>
-  <link rel="stylesheet" href="css/app.css?v=sh10" />
+  <link rel="stylesheet" href="css/app.css?v=yp12" />
 </head>
 <body>
   <main class="phone" aria-label="Фейк Telegram">
@@ -183,7 +183,28 @@
           <option value="local">Локальный (встроенные фразы)</option>
           <option value="neural">Нейросеть в браузере (офлайн, без сервера)</option>
           <option value="gemma">Google AI Studio (Gemma/Gemini)</option>
+          <option value="yandex">Yandex Cloud (YandexGPT / Alice AI)</option>
         </select>
+      </div>
+      <div id="yandexSettingsExt" class="is-hidden">
+        <div class="panel-subtitle">Запросы идут напрямую из браузера в Yandex Cloud. Если сервис вернёт сетевую ошибку сразу при первом сообщении — вероятно, их API не разрешает браузерные (CORS) запросы с чужих доменов; тогда потребуется свой прокси-сервер. Проверить это можно только опытным путём.</div>
+        <div class="custom-section">
+          <label class="custom-label" for="yandexApiKeyInput">API-ключ (Yandex Cloud, Api-Key)</label>
+          <input class="custom-input" type="password" id="yandexApiKeyInput" placeholder="AQVN..." autocomplete="off" />
+          <div class="panel-subtitle">Получить: Yandex Cloud → каталог → «Сервисные аккаунты» → выбрать аккаунт → «Создать новый ключ» → «Создать API-ключ». Не путайте с IAM-токеном — он временный.</div>
+          <label class="custom-check"><input id="yandexPersistKeyInput" type="checkbox" /> Сохранить ключ в следующей сессии</label>
+          <div class="panel-subtitle">Предупреждение: это небезопасно на чужом или общем устройстве — ключ будет записан в хранилище браузера.</div>
+        </div>
+        <div class="custom-section">
+          <label class="custom-label" for="yandexFolderIdInput">ID каталога (folder_id)</label>
+          <input class="custom-input" id="yandexFolderIdInput" placeholder="b1gxxxxxxxxxxxxxxxxx" autocomplete="off" />
+          <div class="panel-subtitle">Виден в консоли Yandex Cloud в шапке страницы каталога.</div>
+        </div>
+        <div class="custom-section">
+          <label class="custom-label" for="yandexModelInput">Модель</label>
+          <input class="custom-input" id="yandexModelInput" placeholder="yandexgpt/latest" autocomplete="off" />
+          <div class="panel-subtitle">По умолчанию yandexgpt/latest. Также можно указать yandexgpt-lite/latest (быстрее и дешевле) или другой идентификатор модели из вашего Yandex AI Studio — например, для Alice AI LLM, если она подключена на вашем аккаунте.</div>
+        </div>
       </div>
       <div id="neuralSettingsExt" class="is-hidden">
         <div class="custom-section">
@@ -504,10 +525,28 @@
       <div class="panel-title">Каталог персонажей</div>
       <div class="panel-subtitle">Ваши персонажи и встроенные. Кнопка «Код» копирует код персонажа — отправьте его любым способом, и другой человек добавит персонажа себе через поле ниже. Если открыт P2P-чат, персонажа можно переслать собеседнику напрямую.</div>
       <div class="catalog-grid" id="catalogGrid"></div>
+      <div class="settings-group">
+        <div class="settings-group-title">☁ Облачный каталог</div>
+        <div class="panel-subtitle">Общие персонажи для всех, у кого настроено то же облако. «☁ В облако» — опубликовать своего, «Добавить» — забрать чужого. <button class="linklike" type="button" id="catalogCloudRefresh">Обновить</button></div>
+        <div class="catalog-grid" id="catalogCloudGrid"></div>
+      </div>
       <div class="custom-section">
         <label class="custom-label" for="catalogImportInput">Добавить по коду</label>
         <textarea class="custom-input p2p-code" id="catalogImportInput" rows="2" placeholder="Вставьте код персонажа — он добавится автоматически"></textarea>
       </div>
+      <details class="cloud-config">
+        <summary>Настройка облака (Supabase)</summary>
+        <div class="panel-subtitle">Бесплатный проект Supabase даёт общий каталог за 5 минут. Полная инструкция — в приложённом PDF. Вставьте сюда Project URL и anon public key из настроек проекта.</div>
+        <label class="custom-label" for="catalogCloudUrl">Project URL</label>
+        <input class="custom-input" id="catalogCloudUrl" placeholder="https://xxxx.supabase.co" autocomplete="off" spellcheck="false" />
+        <label class="custom-label" for="catalogCloudKey">anon public key</label>
+        <textarea class="custom-input p2p-code" id="catalogCloudKey" rows="2" placeholder="eyJhbGciOi… (публичный ключ, безопасно хранить локально)" spellcheck="false"></textarea>
+        <div class="panel-subtitle" id="catalogCloudStatus"></div>
+        <div class="custom-actions">
+          <button class="custom-btn" id="catalogCloudSave" type="button">Сохранить</button>
+          <button class="custom-btn" id="catalogCloudTest" type="button">Проверить связь</button>
+        </div>
+      </details>
     </dialog>
 
     <dialog class="custom-panel patch-notes-panel" id="patchNotesPanel" aria-label="Что нового">
@@ -626,6 +665,6 @@
     <div class="toast" id="toast"></div>
   </main>
 
-  <script src="js/app.js?v=sh10"></script>
+  <script src="js/app.js?v=yp12"></script>
 </body>
 </html>
