@@ -2,6 +2,8 @@
 
 # AI-Gram
 
+![CI](https://github.com/Geroin4uk/AI-Gram/actions/workflows/ci.yml/badge.svg)
+
 ### Telegram с ИИ-персонажами прямо в браузере
 
 PWA • Offline • Local AI • Google Gemini • Без сервера
@@ -168,3 +170,14 @@ python -m http.server
 Made with ❤️ by Geroin4uk
 
 </div>
+
+
+---
+
+## Разработка
+
+Проект — статический PWA без обязательной сборки: правки в `js/`, `css/`, `index.html` работают сразу.
+
+- **Слой провайдеров ИИ** — `js/providers.mjs`: типизированный ES-модуль (JSDoc + strict tsc), единый контракт `complete(ctx)`. OpenAI-совместимые серверы и Anthropic живут здесь; Gemini и Yandex переезжают поэтапно.
+- **Проверка типов**: `npm run typecheck` (без транспиляции — деплой остаётся простым копированием файлов).
+- **Автотесты**: `npm install && npx playwright install chromium`, затем `npm run serve` в одном терминале и `npm test` в другом. Тот же набор гоняется в GitHub Actions на каждый push (`.github/workflows/ci.yml`).

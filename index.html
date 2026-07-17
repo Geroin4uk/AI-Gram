@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://generativelanguage.googleapis.com https://huggingface.co https://*.huggingface.co https://hf.co https://*.hf.co https://raw.githubusercontent.com https://cdn.jsdelivr.net https://esm.run https://*.supabase.co https://llm.api.cloud.yandex.net; img-src 'self' data: blob: https:; media-src 'self' blob:; style-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://esm.run https://cdn.jsdelivr.net; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; manifest-src 'self'; upgrade-insecure-requests" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://generativelanguage.googleapis.com https://huggingface.co https://*.huggingface.co https://hf.co https://*.hf.co https://raw.githubusercontent.com https://cdn.jsdelivr.net https://esm.run https://*.supabase.co https://llm.api.cloud.yandex.net https://api.openai.com https://api.anthropic.com https://openrouter.ai http://localhost:* http://127.0.0.1:*; img-src 'self' data: blob: https:; media-src 'self' blob:; style-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://esm.run https://cdn.jsdelivr.net; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'self'; manifest-src 'self'; upgrade-insecure-requests" />
   <meta name="theme-color" content="#0e1621" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>AI-Gram</title>
-  <link rel="stylesheet" href="css/app.css?v=yp12" />
+  <link rel="stylesheet" href="css/app.css?v=a14" />
 </head>
 <body>
   <main class="phone" aria-label="Фейк Telegram">
@@ -178,33 +178,142 @@
       <div class="panel-title">Умные ответы (ИИ)</div>
       <div class="panel-subtitle">Один провайдер и модель используются для Данила, Ярика и групповых ИИ-персонажей.</div>
       <div class="custom-section">
-        <label class="custom-label" for="aiProviderSelect">Провайдер</label>
-        <select class="custom-select" id="aiProviderSelect">
+        <label class="custom-label">Кто отвечает за персонажей</label>
+        <select class="custom-select is-hidden" id="aiProviderSelect" aria-hidden="true" tabindex="-1">
           <option value="local">Локальный (встроенные фразы)</option>
           <option value="neural">Нейросеть в браузере (офлайн, без сервера)</option>
           <option value="gemma">Google AI Studio (Gemma/Gemini)</option>
           <option value="yandex">Yandex Cloud (YandexGPT / Alice AI)</option>
+          <option value="openai">OpenAI / совместимые (LM Studio, Ollama)</option>
+          <option value="anthropic">Anthropic Claude</option>
         </select>
+        <div class="provider-cards" role="radiogroup" aria-label="Провайдер ИИ">
+          <button class="provider-card" type="button" data-provider="local" role="radio">
+            <strong>Встроенные фразы</strong>
+            <span>Без интернета и настройки. Простые шаблонные ответы.</span>
+            <em class="provider-status" id="provStatusLocal"></em>
+          </button>
+          <button class="provider-card" type="button" data-provider="neural" role="radio">
+            <strong>Нейросеть в браузере</strong>
+            <span>Настоящая LLM без ключей. Один раз скачивается, работает офлайн.</span>
+            <em class="provider-status" id="provStatusNeural"></em>
+          </button>
+          <button class="provider-card" type="button" data-provider="gemma" role="radio">
+            <strong>Google Gemini</strong>
+            <span>Умные ответы из облака Google. Нужен бесплатный ключ.</span>
+            <em class="provider-status" id="provStatusGemma"></em>
+          </button>
+          <button class="provider-card" type="button" data-provider="yandex" role="radio">
+            <strong>YandexGPT / Алиса</strong>
+            <span>Русская нейросеть из Yandex Cloud. Нужны ключ и каталог.</span>
+            <em class="provider-status" id="provStatusYandex"></em>
+          </button>
+          <button class="provider-card" type="button" data-provider="openai" role="radio">
+            <strong>OpenAI / свой сервер</strong>
+            <span>ChatGPT-модели, а также LM Studio, Ollama, OpenRouter — любой совместимый сервер.</span>
+            <em class="provider-status" id="provStatusOpenai"></em>
+          </button>
+          <button class="provider-card" type="button" data-provider="anthropic" role="radio">
+            <strong>Anthropic Claude</strong>
+            <span>Модели Claude напрямую из браузера. Нужен ключ Anthropic.</span>
+            <em class="provider-status" id="provStatusAnthropic"></em>
+          </button>
+        </div>
       </div>
       <div id="yandexSettingsExt" class="is-hidden">
-        <div class="panel-subtitle">Запросы идут напрямую из браузера в Yandex Cloud. Если сервис вернёт сетевую ошибку сразу при первом сообщении — вероятно, их API не разрешает браузерные (CORS) запросы с чужих доменов; тогда потребуется свой прокси-сервер. Проверить это можно только опытным путём.</div>
-        <div class="custom-section">
-          <label class="custom-label" for="yandexApiKeyInput">API-ключ (Yandex Cloud, Api-Key)</label>
-          <input class="custom-input" type="password" id="yandexApiKeyInput" placeholder="AQVN..." autocomplete="off" />
-          <div class="panel-subtitle">Получить: Yandex Cloud → каталог → «Сервисные аккаунты» → выбрать аккаунт → «Создать новый ключ» → «Создать API-ключ». Не путайте с IAM-токеном — он временный.</div>
-          <label class="custom-check"><input id="yandexPersistKeyInput" type="checkbox" /> Сохранить ключ в следующей сессии</label>
-          <div class="panel-subtitle">Предупреждение: это небезопасно на чужом или общем устройстве — ключ будет записан в хранилище браузера.</div>
+        <div class="custom-section setup-steps">
+          <div class="setup-step"><span class="step-num">1</span>
+            <div class="step-body">
+              <div class="step-title">Войдите в Яндекс и получите ключ</div>
+              <a class="custom-btn step-link" id="yandexKeyLink" href="https://console.yandex.cloud/" target="_blank" rel="noopener">Войти в консоль Yandex Cloud ↗</a>
+              <div class="panel-subtitle">В консоли: выберите каталог → «Сервисные аккаунты» → создайте аккаунт с ролью ai.languageModels.user → «Создать новый ключ» → «API-ключ». Заодно скопируйте ID каталога — он в шапке страницы (начинается с b1g…).</div>
+            </div>
+          </div>
+          <div class="setup-step"><span class="step-num">2</span>
+            <div class="step-body">
+              <div class="step-title">Вставьте ключ и ID каталога</div>
+              <input class="custom-input" type="password" id="yandexApiKeyInput" placeholder="AQVN..." autocomplete="off" />
+              <input class="custom-input" id="yandexFolderIdInput" placeholder="ID каталога: b1g…" autocomplete="off" />
+              <label class="custom-check"><input id="yandexPersistKeyInput" type="checkbox" /> Запомнить ключ на этом устройстве</label>
+              <div class="panel-subtitle">Без галочки ключ живёт до закрытия вкладки. С галочкой — сохранится в браузере (не делайте так на чужом устройстве).</div>
+            </div>
+          </div>
+          <div class="setup-step"><span class="step-num">3</span>
+            <div class="step-body">
+              <div class="step-title">Проверьте, что всё работает</div>
+              <button class="custom-btn" id="testYandexBtn" type="button">Проверить связь</button>
+              <div class="panel-subtitle" id="yandexTestStatus"></div>
+            </div>
+          </div>
         </div>
-        <div class="custom-section">
-          <label class="custom-label" for="yandexFolderIdInput">ID каталога (folder_id)</label>
-          <input class="custom-input" id="yandexFolderIdInput" placeholder="b1gxxxxxxxxxxxxxxxxx" autocomplete="off" />
-          <div class="panel-subtitle">Виден в консоли Yandex Cloud в шапке страницы каталога.</div>
-        </div>
-        <div class="custom-section">
+        <details class="advanced-block">
+          <summary>Дополнительно: модель</summary>
           <label class="custom-label" for="yandexModelInput">Модель</label>
           <input class="custom-input" id="yandexModelInput" placeholder="yandexgpt/latest" autocomplete="off" />
-          <div class="panel-subtitle">По умолчанию yandexgpt/latest. Также можно указать yandexgpt-lite/latest (быстрее и дешевле) или другой идентификатор модели из вашего Yandex AI Studio — например, для Alice AI LLM, если она подключена на вашем аккаунте.</div>
+          <div class="panel-subtitle">yandexgpt/latest — умнее, yandexgpt-lite/latest — быстрее и дешевле. Можно указать идентификатор Alice AI LLM, если она открыта на вашем аккаунте.</div>
+        </details>
+        <div class="panel-subtitle">Если при первом сообщении будет сетевая ошибка — возможно, API Яндекса не пускает браузерные (CORS) запросы; это ограничение с их стороны.</div>
+      </div>
+      <div id="openaiSettingsExt" class="is-hidden">
+        <div class="custom-section setup-steps">
+          <div class="setup-step"><span class="step-num">1</span>
+            <div class="step-body">
+              <div class="step-title">Получите ключ (или укажите свой сервер)</div>
+              <a class="custom-btn step-link" id="openaiKeyLink" href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">Войти в OpenAI и открыть ключи ↗</a>
+              <div class="panel-subtitle">Для локальных серверов (LM Studio, Ollama) ключ не нужен — просто укажите адрес сервера в «Дополнительно» (например, http://localhost:1234/v1).</div>
+            </div>
+          </div>
+          <div class="setup-step"><span class="step-num">2</span>
+            <div class="step-body">
+              <div class="step-title">Вставьте ключ</div>
+              <input class="custom-input" type="password" id="openaiApiKeyInput" placeholder="sk-..." autocomplete="off" />
+              <label class="custom-check"><input id="openaiPersistKeyInput" type="checkbox" /> Запомнить ключ на этом устройстве</label>
+            </div>
+          </div>
+          <div class="setup-step"><span class="step-num">3</span>
+            <div class="step-body">
+              <div class="step-title">Проверьте, что всё работает</div>
+              <button class="custom-btn" id="testOpenaiBtn" type="button">Проверить связь</button>
+              <div class="panel-subtitle" id="openaiTestStatus"></div>
+            </div>
+          </div>
         </div>
+        <details class="advanced-block">
+          <summary>Дополнительно: сервер и модель</summary>
+          <label class="custom-label" for="openaiBaseUrlInput">Адрес сервера (base URL)</label>
+          <input class="custom-input" id="openaiBaseUrlInput" placeholder="https://api.openai.com/v1" autocomplete="off" spellcheck="false" />
+          <label class="custom-label" for="openaiModelInput">Модель</label>
+          <input class="custom-input" id="openaiModelInput" placeholder="gpt-4o-mini" autocomplete="off" />
+        </details>
+      </div>
+      <div id="anthropicSettingsExt" class="is-hidden">
+        <div class="custom-section setup-steps">
+          <div class="setup-step"><span class="step-num">1</span>
+            <div class="step-body">
+              <div class="step-title">Войдите в Anthropic и получите ключ</div>
+              <a class="custom-btn step-link" id="anthropicKeyLink" href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Войти и открыть страницу ключей ↗</a>
+            </div>
+          </div>
+          <div class="setup-step"><span class="step-num">2</span>
+            <div class="step-body">
+              <div class="step-title">Вставьте ключ</div>
+              <input class="custom-input" type="password" id="anthropicApiKeyInput" placeholder="sk-ant-..." autocomplete="off" />
+              <label class="custom-check"><input id="anthropicPersistKeyInput" type="checkbox" /> Запомнить ключ на этом устройстве</label>
+            </div>
+          </div>
+          <div class="setup-step"><span class="step-num">3</span>
+            <div class="step-body">
+              <div class="step-title">Проверьте, что всё работает</div>
+              <button class="custom-btn" id="testAnthropicBtn" type="button">Проверить связь</button>
+              <div class="panel-subtitle" id="anthropicTestStatus"></div>
+            </div>
+          </div>
+        </div>
+        <details class="advanced-block">
+          <summary>Дополнительно: модель</summary>
+          <label class="custom-label" for="anthropicModelInput">Модель</label>
+          <input class="custom-input" id="anthropicModelInput" placeholder="claude-3-5-haiku-latest" autocomplete="off" />
+        </details>
       </div>
       <div id="neuralSettingsExt" class="is-hidden">
         <div class="custom-section">
@@ -218,19 +327,36 @@
         </div>
       </div>
       <div id="apiSettingsExt" class="is-hidden">
-        <div class="custom-section">
-          <label class="custom-label" for="apiKeyInput">API Ключ (от Google AI Studio)</label>
-          <input class="custom-input" type="password" id="apiKeyInput" placeholder="Ваш API Ключ" autocomplete="off" />
-          <div class="panel-subtitle">Ключ нужен только для Google AI Studio. Для встроенной локальной модели он не требуется.</div>
-          <button class="custom-btn" id="googleGuideBtn" type="button">Подробная инструкция по ключу</button>
-          <div class="panel-subtitle">По умолчанию ключ берётся из переменной окружения страницы или хранится только в памяти вкладки.</div>
-          <label class="custom-check"><input id="persistApiKeyInput" type="checkbox" /> Сохранить ключ в следующей сессии</label>
-          <div class="panel-subtitle">Предупреждение: это небезопасно на чужом или общем устройстве — ключ будет записан в хранилище браузера.</div>
+        <div class="custom-section setup-steps">
+          <div class="setup-step"><span class="step-num">1</span>
+            <div class="step-body">
+              <div class="step-title">Войдите в Google и получите ключ</div>
+              <a class="custom-btn step-link" id="googleKeyLink" href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Войти и открыть страницу ключа ↗</a>
+              <div class="panel-subtitle">Откроется Google AI Studio: войдите в аккаунт → «Create API key» → скопируйте ключ. Бесплатно, карта не нужна.</div>
+              <button class="linklike" id="googleGuideBtn" type="button">Подробная инструкция со скриншотами</button>
+            </div>
+          </div>
+          <div class="setup-step"><span class="step-num">2</span>
+            <div class="step-body">
+              <div class="step-title">Вставьте ключ</div>
+              <input class="custom-input" type="password" id="apiKeyInput" placeholder="AIza..." autocomplete="off" />
+              <label class="custom-check"><input id="persistApiKeyInput" type="checkbox" /> Запомнить ключ на этом устройстве</label>
+              <div class="panel-subtitle">Без галочки ключ живёт до закрытия вкладки. С галочкой — сохранится в браузере (не делайте так на чужом устройстве).</div>
+            </div>
+          </div>
+          <div class="setup-step"><span class="step-num">3</span>
+            <div class="step-body">
+              <div class="step-title">Проверьте, что всё работает</div>
+              <button class="custom-btn" id="testGeminiBtn" type="button">Проверить связь</button>
+              <div class="panel-subtitle" id="geminiTestStatus"></div>
+            </div>
+          </div>
         </div>
-        <div class="custom-section">
-          <label class="custom-label" for="apiModelInput">Модель (напр. gemini-3.1-flash-lite)</label>
+        <details class="advanced-block">
+          <summary>Дополнительно: модель</summary>
+          <label class="custom-label" for="apiModelInput">Модель</label>
           <input class="custom-input" id="apiModelInput" placeholder="gemini-3.1-flash-lite" autocomplete="off" />
-        </div>
+        </details>
       </div>
       <div class="custom-actions">
         <button class="custom-btn" id="saveApiBtn" type="button">Сохранить</button>
@@ -665,6 +791,6 @@
     <div class="toast" id="toast"></div>
   </main>
 
-  <script src="js/app.js?v=yp12"></script>
+  <script src="js/app.js?v=a14"></script>
 </body>
 </html>

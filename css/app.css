@@ -1424,3 +1424,57 @@
     .cloud-config { margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 10px; }
     .cloud-config summary { cursor: pointer; font-weight: 600; padding: 6px 0; color: var(--text); }
     .cloud-config summary::marker { color: var(--accent); }
+
+    /* =============== Простая настройка ИИ: карточки, мастер, баннер =============== */
+    .provider-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+    @media (max-width: 560px) { .provider-cards { grid-template-columns: 1fr; } }
+    .provider-card {
+      display: flex; flex-direction: column; gap: 4px; text-align: left;
+      padding: 12px 14px; border-radius: var(--radius-md);
+      background: rgba(255,255,255,0.05);
+      border: 1.5px solid rgba(255,255,255,0.09);
+      color: var(--text); cursor: pointer;
+      transition: border-color 0.2s ease, background 0.2s ease, transform 0.16s var(--ease-spring);
+    }
+    .provider-card:hover { background: rgba(255,255,255,0.08); }
+    .provider-card:active { transform: scale(0.98); }
+    .provider-card.active {
+      border-color: var(--accent);
+      background: color-mix(in srgb, var(--accent) 12%, transparent);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
+    }
+    .provider-card strong { font-size: 14px; }
+    .provider-card span { font-size: 12px; color: var(--muted); line-height: 1.35; }
+    .provider-card .provider-status { font-size: 11.5px; font-style: normal; margin-top: 2px; color: var(--muted); }
+    .provider-card .provider-status.ok { color: #57d38c; }
+    .provider-card .provider-status.warn { color: #f0b429; }
+
+    .setup-steps { display: flex; flex-direction: column; gap: 14px; }
+    .setup-step { display: flex; gap: 12px; align-items: flex-start; }
+    .step-num {
+      flex: none; width: 26px; height: 26px; border-radius: 50%;
+      display: grid; place-items: center;
+      background: var(--accent); color: #fff; font-weight: 700; font-size: 13px;
+      margin-top: 1px;
+    }
+    .step-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+    .step-title { font-weight: 650; font-size: 13.5px; }
+    .step-link { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+    .advanced-block { margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px; }
+    .advanced-block summary { cursor: pointer; font-size: 13px; color: var(--muted); padding: 4px 0; }
+
+    /* Баннер «локальная модель» над композером */
+    .local-hint {
+      display: flex; align-items: center; gap: 10px;
+      margin: 0 12px 8px; padding: 10px 12px;
+      border-radius: var(--radius-md);
+      background: color-mix(in srgb, var(--accent) 12%, transparent);
+      border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+      font-size: 13px; line-height: 1.35;
+      animation: panelIn 0.3s var(--ease-spring);
+    }
+    .local-hint-text { flex: 1; min-width: 0; }
+    .local-hint .mini-action { flex: none; padding: 7px 12px; }
+    .local-hint-close { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: var(--muted); background: none; border: 0; cursor: pointer; font-size: 16px; }
+    .local-hint-close:hover { background: rgba(255,255,255,0.1); color: var(--text); }
+    /* =============== /Простая настройка ИИ =============== */

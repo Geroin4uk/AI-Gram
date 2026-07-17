@@ -105,6 +105,15 @@
     const yandexFolderIdInput = document.getElementById('yandexFolderIdInput');
     const yandexModelInput = document.getElementById('yandexModelInput');
     const yandexPersistKeyInput = document.getElementById('yandexPersistKeyInput');
+    const openaiSettingsExt = document.getElementById('openaiSettingsExt');
+    const openaiApiKeyInput = document.getElementById('openaiApiKeyInput');
+    const openaiBaseUrlInput = document.getElementById('openaiBaseUrlInput');
+    const openaiModelInput = document.getElementById('openaiModelInput');
+    const openaiPersistKeyInput = document.getElementById('openaiPersistKeyInput');
+    const anthropicSettingsExt = document.getElementById('anthropicSettingsExt');
+    const anthropicApiKeyInput = document.getElementById('anthropicApiKeyInput');
+    const anthropicModelInput = document.getElementById('anthropicModelInput');
+    const anthropicPersistKeyInput = document.getElementById('anthropicPersistKeyInput');
     const neuralSettingsExt = document.getElementById('neuralSettingsExt');
     const neuralBackendStatus = document.getElementById('neuralBackendStatus');
     const neuralModelInfo = document.getElementById('neuralModelInfo');
@@ -270,6 +279,31 @@
         return storageGet('danilYandexApiKeyPersisted', 'false') === 'true' ? storageGet('danilYandexApiKey', '') : '';
       }
     }
+    // Обобщённое хранилище ключей: та же схема (сессия по умолчанию, постоянно — по согласию),
+    // без копипасты на каждого нового провайдера.
+    function makeKeyStore(prefix) {
+      const keyName = `danil${prefix}ApiKey`;
+      const flagName = `${keyName}Persisted`;
+      const sessionName = `${keyName}Session`;
+      return {
+        get() {
+          try {
+            if (storageGet(flagName, 'false') === 'true') return storageGet(keyName, '');
+            return sessionStorage.getItem(sessionName) || '';
+          } catch { return storageGet(flagName, 'false') === 'true' ? storageGet(keyName, '') : ''; }
+        },
+        set(value, persist) {
+          try { sessionStorage.removeItem(sessionName); } catch {}
+          if (value && persist) { storageSet(keyName, value); storageSet(flagName, 'true'); return; }
+          storageRemove(keyName); storageSet(flagName, 'false');
+          try { if (value) sessionStorage.setItem(sessionName, value); } catch {}
+        },
+        flagName, keyName
+      };
+    }
+    const openaiKeyStore = makeKeyStore('Openai');
+    const anthropicKeyStore = makeKeyStore('Anthropic');
+
     function setPersistedYandexKey(value, persist) {
       try { sessionStorage.removeItem('danilYandexApiKeySession'); } catch {}
       if (value && persist) {
@@ -309,7 +343,10 @@
       autoMaxSeconds: 8
     });
     const API_CONFIG = Object.freeze({
-      providers: Object.freeze({ local: 'Локально', neural: 'Локальная LLM (браузер)', gemma: 'Google AI Studio', yandex: 'Yandex Cloud' }),
+      providers: Object.freeze({ local: 'Локально', neural: 'Локальная LLM (браузер)', gemma: 'Google AI Studio', yandex: 'Yandex Cloud', openai: 'OpenAI / совместимые', anthropic: 'Anthropic Claude' }),
+      defaultOpenaiBaseUrl: 'https://api.openai.com/v1',
+      defaultOpenaiModel: 'gpt-4o-mini',
+      defaultAnthropicModel: 'claude-3-5-haiku-latest',
       defaultProvider: 'local',
       defaultModel: 'gemini-3.1-flash-lite',
       geminiBaseUrl: 'https://generativelanguage.googleapis.com/v1beta/models',
@@ -364,6 +401,19 @@
     let yandexApiKey = envGet('YANDEX_API_KEY') || getPersistedYandexKey();
     let yandexFolderId = safeText(storageGet('danilYandexFolderId', ''), '', 60);
     let yandexModel = String(storageGet('danilYandexModel', API_CONFIG.defaultYandexModel)).replace(API_CONFIG.modelPattern, '').slice(0, 80) || API_CONFIG.defaultYandexModel;
+    let openaiApiKey = openaiKeyStore.get();
+    let openaiBaseUrl = safeText(storageGet('danilOpenaiBaseUrl', API_CONFIG.defaultOpenaiBaseUrl), API_CONFIG.defaultOpenaiBaseUrl, 200);
+    let openaiModel = String(storageGet('danilOpenaiModel', API_CONFIG.defaultOpenaiModel)).replace(API_CONFIG.modelPattern, '').slice(0, 80) || API_CONFIG.defaultOpenaiModel;
+    let anthropicApiKey = anthropicKeyStore.get();
+    let anthropicModel = String(storageGet('danilAnthropicModel', API_CONFIG.defaultAnthropicModel)).replace(API_CONFIG.modelPattern, '').slice(0, 80) || API_CONFIG.defaultAnthropicModel;
+    // Модульный слой провайдеров (js/providers.mjs) грузится лениво; при офлайне без кеша
+    // диспетчер честно скажет об этом вместо тихого падения.
+    let providerModule = null;
+    async function loadProviderModule() {
+      if (providerModule) return providerModule;
+      providerModule = await import('./providers.mjs?v=a14');
+      return providerModule;
+    }
     AppContext.setApiConfig({ aiProvider, apiKey, apiModel });
 
     const DEFAULT_CUSTOMS = {
@@ -386,7 +436,7 @@
       en: { message: 'Message', online: 'online', offline: 'Offline — outgoing messages will be queued until connection returns' },
       uk: { message: 'Повідомлення', online: 'у мережі', offline: 'Немає мережі — вихідні повідомлення буде надіслано після відновлення з’єднання' }
     });
-    const BACKUP_KEYS = ['aiPersonaChats', 'personaCustomSettings', 'danilCustomSettings', 'customAiPersonas', 'aiChatUiSettings', 'danilTheme', 'danilThemeAnimated', 'danilThemeGlass', 'danilCustomTheme', 'danilAiProvider', 'danilApiModel', 'danilYandexFolderId', 'danilYandexModel', 'messengerUserProfile', 'aiPlugins', 'aiMemoryEnabled', 'aiVoiceDsp'];
+    const BACKUP_KEYS = ['aiPersonaChats', 'personaCustomSettings', 'danilCustomSettings', 'customAiPersonas', 'aiChatUiSettings', 'danilTheme', 'danilThemeAnimated', 'danilThemeGlass', 'danilCustomTheme', 'danilAiProvider', 'danilApiModel', 'danilYandexFolderId', 'danilYandexModel', 'danilOpenaiBaseUrl', 'danilOpenaiModel', 'danilAnthropicModel', 'messengerUserProfile', 'aiPlugins', 'aiMemoryEnabled', 'aiVoiceDsp'];
     const SAFE_AI_PROVIDERS = new Set(Object.keys(API_CONFIG.providers));
     const SAFE_PERSONA_STYLES = new Set(Object.keys(STYLE_LABELS));
 
@@ -2907,7 +2957,7 @@
       if (!confirm(CONFIRM_MESSAGES.resetAll)) return;
       stopAutoChat();
       clearAppTimers();
-      ['aiPersonaChats','aiPersonaChatsEncrypted','aiMessengerEncryptionSecret','customAiPersonas','personaCustomSettings','danilCustomSettings','aiChatUiSettings','danilApiKeyPersisted','danilAiProvider','danilApiKey','danilApiModel','danilYandexApiKey','danilYandexApiKeyPersisted','danilYandexFolderId','danilYandexModel','danilTheme','danilThemeAnimated','danilThemeGlass','danilCustomTheme','messengerUserProfile','aiReplyCache','aiPlugins','aiMemoryEnabled','aiVoiceDsp'].forEach(key => storageRemove(key));
+      ['aiPersonaChats','aiPersonaChatsEncrypted','aiMessengerEncryptionSecret','customAiPersonas','personaCustomSettings','danilCustomSettings','aiChatUiSettings','danilApiKeyPersisted','danilAiProvider','danilApiKey','danilApiModel','danilYandexApiKey','danilYandexApiKeyPersisted','danilYandexFolderId','danilYandexModel','danilOpenaiApiKey','danilOpenaiApiKeyPersisted','danilOpenaiBaseUrl','danilOpenaiModel','danilAnthropicApiKey','danilAnthropicApiKeyPersisted','danilAnthropicModel','danilTheme','danilThemeAnimated','danilThemeGlass','danilCustomTheme','messengerUserProfile','aiReplyCache','aiPlugins','aiMemoryEnabled','aiVoiceDsp'].forEach(key => storageRemove(key));
       try {
         sessionStorage.removeItem('danilApiKey');
         sessionStorage.removeItem('danilApiKeySession');
@@ -2916,7 +2966,7 @@
       } catch {}
       try { await clearChatsDb(); } catch {}
       clearAiReplyCache();
-      aiProvider = API_CONFIG.defaultProvider; apiKey = ''; apiModel = API_CONFIG.defaultModel; yandexApiKey = ''; yandexFolderId = ''; yandexModel = API_CONFIG.defaultYandexModel; AppContext.setApiConfig({ aiProvider, apiKey, apiModel }); customSettings = loadCustomSettings(); custom = customSettings.danil; customPersonas = {}; Object.keys(builtInPersonas).forEach(syncBuiltInPersona); personas = { ...builtInPersonas };
+      aiProvider = API_CONFIG.defaultProvider; apiKey = ''; apiModel = API_CONFIG.defaultModel; yandexApiKey = ''; yandexFolderId = ''; yandexModel = API_CONFIG.defaultYandexModel; openaiApiKey = ''; openaiBaseUrl = API_CONFIG.defaultOpenaiBaseUrl; openaiModel = API_CONFIG.defaultOpenaiModel; anthropicApiKey = ''; anthropicModel = API_CONFIG.defaultAnthropicModel; AppContext.setApiConfig({ aiProvider, apiKey, apiModel }); customSettings = loadCustomSettings(); custom = customSettings.danil; customPersonas = {}; Object.keys(builtInPersonas).forEach(syncBuiltInPersona); personas = { ...builtInPersonas };
       setChats(defaultChats()); activeChatId = 'danil'; setActiveChatId('danil'); activeCustomPersonaId = 'danil'; uiSettings = loadUiSettings(); AppContext.setUiSettings(uiSettings);
       registrationNameInput.value = '';
       registrationHandleInput.value = '';
@@ -2934,7 +2984,10 @@
       openPanel('api');
       aiProviderSelect.value = aiProvider; apiKeyInput.value = apiKey ? '••••••••' : ''; apiModelInput.value = apiModel; persistApiKeyInput.checked = storageGet('danilApiKeyPersisted', 'false') === 'true';
       yandexApiKeyInput.value = yandexApiKey ? '••••••••' : ''; yandexFolderIdInput.value = yandexFolderId; yandexModelInput.value = yandexModel; yandexPersistKeyInput.checked = storageGet('danilYandexApiKeyPersisted', 'false') === 'true';
+      openaiApiKeyInput.value = openaiApiKey ? '••••••••' : ''; openaiBaseUrlInput.value = openaiBaseUrl; openaiModelInput.value = openaiModel; openaiPersistKeyInput.checked = storageGet(openaiKeyStore.flagName, 'false') === 'true';
+      anthropicApiKeyInput.value = anthropicApiKey ? '••••••••' : ''; anthropicModelInput.value = anthropicModel; anthropicPersistKeyInput.checked = storageGet(anthropicKeyStore.flagName, 'false') === 'true';
       toggleApiExt();
+      renderProviderCards();
     }
 
     function openApiGuidePanel() {
@@ -2965,6 +3018,10 @@
       yandexFolderIdInput.disabled = !showYandex;
       yandexModelInput.disabled = !showYandex;
       yandexPersistKeyInput.disabled = !showYandex;
+      const showOpenai = aiProviderSelect.value === 'openai';
+      openaiSettingsExt.classList.toggle('is-hidden', !showOpenai);
+      const showAnthropic = aiProviderSelect.value === 'anthropic';
+      anthropicSettingsExt.classList.toggle('is-hidden', !showAnthropic);
       const showNeural = aiProviderSelect.value === 'neural';
       neuralSettingsExt.classList.toggle('is-hidden', !showNeural);
       if (showNeural) renderNeuralStatus();
@@ -2987,11 +3044,23 @@
       if (yandexPersistKeyInput.checked && yandexApiKey && !confirm('Сохранить API-ключ Yandex Cloud в браузере после выхода? Это небезопасно на чужом устройстве.')) yandexPersistKeyInput.checked = false;
       setPersistedYandexKey(yandexApiKey, yandexPersistKeyInput.checked);
       storageSet('danilYandexFolderId', yandexFolderId); storageSet('danilYandexModel', yandexModel);
+      openaiApiKey = openaiApiKeyInput.value === '••••••••' ? openaiApiKey : safeText(openaiApiKeyInput.value, '', 220);
+      openaiBaseUrl = safeText(openaiBaseUrlInput.value, API_CONFIG.defaultOpenaiBaseUrl, 200) || API_CONFIG.defaultOpenaiBaseUrl;
+      openaiModel = String(openaiModelInput.value || API_CONFIG.defaultOpenaiModel).replace(API_CONFIG.modelPattern, '').slice(0, 80) || API_CONFIG.defaultOpenaiModel;
+      if (openaiPersistKeyInput.checked && openaiApiKey && !confirm('Сохранить ключ OpenAI в браузере после выхода? Это небезопасно на чужом устройстве.')) openaiPersistKeyInput.checked = false;
+      openaiKeyStore.set(openaiApiKey, openaiPersistKeyInput.checked);
+      storageSet('danilOpenaiBaseUrl', openaiBaseUrl); storageSet('danilOpenaiModel', openaiModel);
+      anthropicApiKey = anthropicApiKeyInput.value === '••••••••' ? anthropicApiKey : safeText(anthropicApiKeyInput.value, '', 220);
+      anthropicModel = String(anthropicModelInput.value || API_CONFIG.defaultAnthropicModel).replace(API_CONFIG.modelPattern, '').slice(0, 80) || API_CONFIG.defaultAnthropicModel;
+      if (anthropicPersistKeyInput.checked && anthropicApiKey && !confirm('Сохранить ключ Anthropic в браузере после выхода? Это небезопасно на чужом устройстве.')) anthropicPersistKeyInput.checked = false;
+      anthropicKeyStore.set(anthropicApiKey, anthropicPersistKeyInput.checked);
+      storageSet('danilAnthropicModel', anthropicModel);
       clearAiReplyCache();
       AppContext.setApiConfig({ aiProvider, apiKey, apiModel });
-      updateAiMenuLabel(); closeOverlay();
+      updateAiMenuLabel(); renderProviderCards(); closeOverlay();
       if (aiProvider === 'gemma' && !apiKey) showToast('Выбран Google AI, но ключ не введён');
       else if (aiProvider === 'yandex' && (!yandexApiKey || !yandexFolderId)) showToast('Выбран Yandex Cloud, но не заполнены ключ и/или ID каталога');
+      else if (aiProvider === 'anthropic' && !anthropicApiKey) showToast('Выбран Claude, но ключ не введён');
       else showToast('Настройки нейросети сохранены');
     });
 
@@ -3588,6 +3657,7 @@
     }
 
     function renderNeuralStatus() {
+      if (typeof renderProviderCards === 'function') { try { renderProviderCards(); } catch {} }
       if (!neuralBackendStatus) return;
       const cfg = neuralBackendConfig();
       const backendLabel = neuralState.backend === 'webgpu' ? 'WebGPU обнаружен — доступна модель побольше' : neuralState.backend === 'wasm' ? 'WebGPU недоступен — работаем через WASM (медленнее, но везде)' : 'Определяю поддержку WebGPU…';
@@ -3707,6 +3777,24 @@
           // Синхронный (нестриминговый) режим Yandex Cloud — onChunk не вызывается,
           // вызывающий код сам покажет финальный текст печатающим эффектом.
           return getYandexReply(userText, persona, chat, imageData, signal);
+        case 'openai':
+        case 'anthropic': {
+          // Новый модульный слой (js/providers.mjs): единый контракт complete(ctx)
+          const mod = await loadProviderModule().catch(() => null);
+          if (!mod) throw new Error('Модуль провайдеров не загрузился (офлайн без кеша?)');
+          const provider = mod.PROVIDERS[aiProvider];
+          const raw = await provider.complete({
+            messages: neuralChatMessages(userText, persona, chat),
+            apiKey: aiProvider === 'openai' ? openaiApiKey : anthropicApiKey,
+            model: aiProvider === 'openai' ? openaiModel : anthropicModel,
+            baseUrl: aiProvider === 'openai' ? openaiBaseUrl : undefined,
+            maxTokens: APP_LIMITS.maxAiReplyLength * 2,
+            temperature: persona.id === 'yarik' ? 0.72 : 0.68,
+            signal
+          });
+          const cleaned = cleanAiReply(raw, persona);
+          return cleaned || getLocalReply(userText, persona, chat);
+        }
         case 'neural':
           return getNeuralReply(userText, persona, chat, signal);
         case 'local':
@@ -4057,8 +4145,10 @@
       // Bug fix: everything used to be queued offline, although only the Gemma provider
       // actually needs the network — local phrases and a loaded in-browser model answer
       // fine without a connection.
-      if (!navigator.onLine && (aiProvider === 'gemma' || aiProvider === 'yandex')) { offlineQueue.push({ chatId: activeChatId, text }); showToast('Нет сети: ответ ИИ придёт после восстановления связи'); return; }
+      if (!navigator.onLine && ['gemma', 'yandex', 'openai', 'anthropic'].includes(aiProvider)) { offlineQueue.push({ chatId: activeChatId, text }); showToast('Нет сети: ответ ИИ придёт после восстановления связи'); return; }
       scheduleAiReplies(text);
+      // Ненавязчиво предлагаем включить настоящую нейросеть, если отвечают шаблоны
+      maybeShowLocalModelHint();
     }
 
     function scheduleAiReplies(text, imageData = null, chatId = activeChatId) {
@@ -4469,7 +4559,10 @@
           yandexFolderIdInput.value = yandexFolderId;
           yandexModelInput.value = yandexModel;
           yandexPersistKeyInput.checked = storageGet('danilYandexApiKeyPersisted', 'false') === 'true';
+          openaiApiKeyInput.value = openaiApiKey ? '••••••••' : ''; openaiBaseUrlInput.value = openaiBaseUrl; openaiModelInput.value = openaiModel; openaiPersistKeyInput.checked = storageGet(openaiKeyStore.flagName, 'false') === 'true';
+          anthropicApiKeyInput.value = anthropicApiKey ? '••••••••' : ''; anthropicModelInput.value = anthropicModel; anthropicPersistKeyInput.checked = storageGet(anthropicKeyStore.flagName, 'false') === 'true';
           toggleApiExt();
+          renderProviderCards();
         });
       }
       if (action === 'persona') switchSettingsPanel('persona', renderPersonaList);
@@ -5875,7 +5968,7 @@
       { id: 'app:p2p', icon: '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>', label: 'P2P-чат', hint: 'связь с человеком' }
     );
     // Штамп сборки — чтобы сразу видеть, что загружена свежая версия (а не старый кеш).
-    const AIGRAM_BUILD = 'yandex-provider-12';
+    const AIGRAM_BUILD = 'arch-14';
     try {
       console.log('%cAI-Gram build: ' + AIGRAM_BUILD, 'color:#2aabee;font-weight:bold');
       const stampHost = document.querySelector('#uiPanel .settings-shortcuts');
@@ -5968,6 +6061,18 @@
 
     // ---- Патч-ноуты: показываются один раз при первом входе в новую сборку ----------
     const AIGRAM_CHANGELOG = {
+      'arch-14': [
+        'Новые провайдеры: OpenAI (и совместимые — LM Studio, Ollama, OpenRouter) и Anthropic Claude',
+        'Слой провайдеров вынесен в отдельный типизированный ES-модуль — начало модульной архитектуры',
+        'Автотесты и проверка типов теперь в репозитории: папка tests/ + GitHub Actions (CI на каждый push)',
+        'Умная вставка понимает ключи sk-… (OpenAI) и sk-ant-… (Claude)'
+      ],
+      'simple-setup-13': [
+        'Настройка ИИ переработана: наглядные карточки провайдеров со статусами вместо выпадающего списка',
+        'Мастер подключения в 3 шага: «Войти и получить ключ» → вставить → «Проверить связь»',
+        'Умная вставка: приложение само понимает, чей это ключ (Google или Яндекс), и переключает провайдера',
+        'Подсказка при встроенных фразах: баннер с кнопкой «Настроить ИИ», чтобы включить настоящую нейросеть'
+      ],
       'yandex-provider-12': [
         'Новый провайдер ИИ: Yandex Cloud (YandexGPT / Alice AI) — настраивается в «Настройки → Нейросеть»',
         'Групповые чаты: исправлена путаница личности между персонажами — раньше ИИ иногда думал, что сам сказал чужую реплику',
@@ -6382,6 +6487,186 @@
         if (handled) p2pEls.in.value = '';
       } finally { p2pEls.in.dataset.busy = '0'; }
     });
+
+
+    // ==================================================================================
+    // Простая настройка ИИ: карточки провайдеров, автодетект ключа, проверка связи,
+    // подсказка при локальной модели.
+    // ==================================================================================
+    const providerStatusEls = {
+      local: document.getElementById('provStatusLocal'),
+      neural: document.getElementById('provStatusNeural'),
+      gemma: document.getElementById('provStatusGemma'),
+      yandex: document.getElementById('provStatusYandex'),
+      openai: document.getElementById('provStatusOpenai'),
+      anthropic: document.getElementById('provStatusAnthropic')
+    };
+    function setProviderStatus(el, text, kind) {
+      if (!el) return;
+      el.textContent = text;
+      el.classList.remove('ok', 'warn');
+      if (kind) el.classList.add(kind);
+    }
+    function renderProviderCards() {
+      document.querySelectorAll('.provider-card').forEach(card => {
+        const selected = card.dataset.provider === aiProviderSelect.value;
+        card.classList.toggle('active', selected);
+        card.setAttribute('aria-checked', String(selected));
+      });
+      setProviderStatus(providerStatusEls.local, '✓ всегда готов', 'ok');
+      const neuralLabels = { ready: ['✓ модель загружена', 'ok'], loading: ['загружается…', 'warn'], error: ['ошибка загрузки', 'warn'] };
+      const [nText, nKind] = neuralLabels[neuralState.status] || ['нужно скачать модель', null];
+      setProviderStatus(providerStatusEls.neural, nText, nKind);
+      setProviderStatus(providerStatusEls.gemma, apiKey ? '✓ ключ введён' : 'нужен ключ', apiKey ? 'ok' : 'warn');
+      const yandexReady = yandexApiKey && yandexFolderId;
+      setProviderStatus(providerStatusEls.yandex, yandexReady ? '✓ настроен' : 'нужны ключ и каталог', yandexReady ? 'ok' : 'warn');
+      const openaiLocalServer = openaiBaseUrl && !openaiBaseUrl.includes('api.openai.com');
+      setProviderStatus(providerStatusEls.openai, openaiApiKey ? '✓ ключ введён' : (openaiLocalServer ? '✓ свой сервер' : 'нужен ключ'), (openaiApiKey || openaiLocalServer) ? 'ok' : 'warn');
+      setProviderStatus(providerStatusEls.anthropic, anthropicApiKey ? '✓ ключ введён' : 'нужен ключ', anthropicApiKey ? 'ok' : 'warn');
+    }
+    // Клик по карточке = мгновенный выбор провайдера (ключи сохраняются отдельной кнопкой)
+    document.querySelectorAll('.provider-card').forEach(card => bindTap(card, () => {
+      const value = card.dataset.provider;
+      if (!SAFE_AI_PROVIDERS.has(value)) return;
+      aiProviderSelect.value = value;
+      aiProvider = value;
+      storageSet('danilAiProvider', aiProvider);
+      AppContext.setApiConfig({ aiProvider, apiKey, apiModel });
+      updateAiMenuLabel();
+      toggleApiExt();
+      renderProviderCards();
+      if (value === 'gemma' && !apiKey) showToast('Выбран Google Gemini — остался шаг: вставьте ключ ниже');
+      else if (value === 'yandex' && (!yandexApiKey || !yandexFolderId)) showToast('Выбран YandexGPT — заполните ключ и каталог ниже');
+      else showToast(`Провайдер: ${API_CONFIG.providers[value]}`);
+    }));
+
+    // Автоопределение ключа по префиксу: вставили не в то поле — перенесём и переключим сами
+    function detectPastedKey(input, expected) {
+      const value = String(input.value || '').trim();
+      if (expected !== 'yandex' && /^AQVN/i.test(value)) {
+        input.value = '';
+        yandexApiKeyInput.value = value;
+        document.querySelector('.provider-card[data-provider="yandex"]')?.click();
+        yandexFolderIdInput.focus();
+        showToast('Это ключ Yandex Cloud — переключил на YandexGPT, осталось указать каталог');
+        return true;
+      }
+      if (expected !== 'gemma' && /^AIza/.test(value)) {
+        input.value = '';
+        apiKeyInput.value = value;
+        document.querySelector('.provider-card[data-provider="gemma"]')?.click();
+        showToast('Это ключ Google — переключил на Gemini');
+        return true;
+      }
+      // Важно: sk-ant- проверяем ДО sk-, иначе ключ Anthropic уедет в OpenAI
+      if (expected !== 'anthropic' && /^sk-ant-/.test(value)) {
+        input.value = '';
+        anthropicApiKeyInput.value = value;
+        document.querySelector('.provider-card[data-provider="anthropic"]')?.click();
+        showToast('Это ключ Anthropic — переключил на Claude');
+        return true;
+      }
+      if (expected !== 'openai' && /^sk-(?!ant-)/.test(value)) {
+        input.value = '';
+        openaiApiKeyInput.value = value;
+        document.querySelector('.provider-card[data-provider="openai"]')?.click();
+        showToast('Это ключ OpenAI — переключил провайдера');
+        return true;
+      }
+      return false;
+    }
+    apiKeyInput?.addEventListener('input', () => detectPastedKey(apiKeyInput, 'gemma'));
+    yandexApiKeyInput?.addEventListener('input', () => detectPastedKey(yandexApiKeyInput, 'yandex'));
+    openaiApiKeyInput?.addEventListener('input', () => detectPastedKey(openaiApiKeyInput, 'openai'));
+    anthropicApiKeyInput?.addEventListener('input', () => detectPastedKey(anthropicApiKeyInput, 'anthropic'));
+
+    // «Проверить связь»: лёгкий реальный запрос ТЕКУЩИМИ значениями полей (до сохранения)
+    const geminiTestStatus = document.getElementById('geminiTestStatus');
+    const yandexTestStatus = document.getElementById('yandexTestStatus');
+    function fieldKey(input, saved) {
+      const raw = String(input?.value || '').trim();
+      return raw && raw !== '••••••••' ? raw : saved;
+    }
+    bindTap(document.getElementById('testGeminiBtn'), async () => {
+      const key = fieldKey(apiKeyInput, apiKey);
+      if (!key) { if (geminiTestStatus) geminiTestStatus.textContent = 'Сначала вставьте ключ (шаг 2).'; return; }
+      if (geminiTestStatus) geminiTestStatus.textContent = 'Проверяю…';
+      try {
+        const res = await fetch(`${API_CONFIG.geminiBaseUrl}?key=${encodeURIComponent(key)}`);
+        if (res.ok) geminiTestStatus.textContent = '✓ Ключ работает. Нажмите «Сохранить» ниже.';
+        else geminiTestStatus.textContent = res.status === 400 || res.status === 403 ? 'Ключ не подошёл — проверьте, что скопирован целиком.' : `Ошибка проверки (HTTP ${res.status}).`;
+      } catch { if (geminiTestStatus) geminiTestStatus.textContent = 'Нет связи с Google (сеть/блокировка).'; }
+    });
+    bindTap(document.getElementById('testYandexBtn'), async () => {
+      const key = fieldKey(yandexApiKeyInput, yandexApiKey);
+      const folder = String(yandexFolderIdInput?.value || '').trim() || yandexFolderId;
+      if (!key || !folder) { if (yandexTestStatus) yandexTestStatus.textContent = 'Сначала вставьте ключ и ID каталога (шаг 2).'; return; }
+      if (yandexTestStatus) yandexTestStatus.textContent = 'Проверяю…';
+      try {
+        const res = await fetch(API_CONFIG.yandexBaseUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Api-Key ${key}`, 'x-folder-id': folder },
+          body: JSON.stringify({ modelUri: `gpt://${folder}/${(yandexModelInput?.value || yandexModel || API_CONFIG.defaultYandexModel).trim()}`, completionOptions: { stream: false, temperature: 0.1, maxTokens: '1' }, messages: [{ role: 'user', text: 'ping' }] })
+        });
+        if (res.ok) yandexTestStatus.textContent = '✓ Всё работает. Нажмите «Сохранить» ниже.';
+        else if (res.status === 401) yandexTestStatus.textContent = 'Ключ не подошёл — проверьте API-ключ сервисного аккаунта.';
+        else if (res.status === 403) yandexTestStatus.textContent = 'Нет прав: выдайте сервисному аккаунту роль ai.languageModels.user.';
+        else yandexTestStatus.textContent = `Ошибка (HTTP ${res.status}) — проверьте ID каталога и модель.`;
+      } catch { if (yandexTestStatus) yandexTestStatus.textContent = 'Нет связи (сеть или CORS-ограничение Яндекса).'; }
+    });
+
+    const openaiTestStatus = document.getElementById('openaiTestStatus');
+    const anthropicTestStatus = document.getElementById('anthropicTestStatus');
+    bindTap(document.getElementById('testOpenaiBtn'), async () => {
+      const key = fieldKey(openaiApiKeyInput, openaiApiKey);
+      const base = String(openaiBaseUrlInput?.value || '').trim() || openaiBaseUrl;
+      if (openaiTestStatus) openaiTestStatus.textContent = 'Проверяю…';
+      try {
+        const mod = await loadProviderModule();
+        const url = `${mod.normalizeBaseUrl(base)}/models`;
+        const res = await fetch(url, { headers: key ? { Authorization: `Bearer ${key}` } : {} });
+        if (res.ok) openaiTestStatus.textContent = '✓ Сервер отвечает. Нажмите «Сохранить» ниже.';
+        else openaiTestStatus.textContent = res.status === 401 ? 'Ключ не подошёл — проверьте, что скопирован целиком.' : `Ошибка (HTTP ${res.status}).`;
+      } catch { if (openaiTestStatus) openaiTestStatus.textContent = 'Нет связи: проверьте адрес сервера/сеть.'; }
+    });
+    bindTap(document.getElementById('testAnthropicBtn'), async () => {
+      const key = fieldKey(anthropicApiKeyInput, anthropicApiKey);
+      if (!key) { if (anthropicTestStatus) anthropicTestStatus.textContent = 'Сначала вставьте ключ (шаг 2).'; return; }
+      if (anthropicTestStatus) anthropicTestStatus.textContent = 'Проверяю…';
+      try {
+        const mod = await loadProviderModule();
+        await mod.PROVIDERS.anthropic.complete({ messages: [{ role: 'user', content: 'ping' }], apiKey: key, model: (anthropicModelInput?.value || anthropicModel).trim(), maxTokens: 1 });
+        anthropicTestStatus.textContent = '✓ Ключ работает. Нажмите «Сохранить» ниже.';
+      } catch (error) {
+        const msg = String(error?.message || '');
+        anthropicTestStatus.textContent = /401|403/.test(msg) ? 'Ключ не подошёл — проверьте, что скопирован целиком.' : `Не получилось: ${msg.slice(0, 90)}`;
+      }
+    });
+
+    // Подсказка при отправке с локальными фразами: можно включить настоящую нейросеть
+    let localHintShownThisSession = false;
+    function maybeShowLocalModelHint() {
+      if (aiProvider !== 'local') return;
+      if (localHintShownThisSession) return;
+      if (storageGet('localHintDismissed', 'false') === 'true') return;
+      if (document.getElementById('localHintBanner')) return;
+      localHintShownThisSession = true;
+      const banner = document.createElement('div');
+      banner.className = 'local-hint';
+      banner.id = 'localHintBanner';
+      const textEl = document.createElement('div');
+      textEl.className = 'local-hint-text';
+      textEl.textContent = 'Сейчас отвечают встроенные фразы — простые шаблоны. Подключите настоящую нейросеть, ответы станут живыми.';
+      const setupBtn = document.createElement('button');
+      setupBtn.type = 'button'; setupBtn.className = 'mini-action'; setupBtn.textContent = 'Настроить ИИ';
+      bindTap(setupBtn, () => { banner.remove(); openApiPanel(); renderProviderCards(); });
+      const closeBtn = document.createElement('button');
+      closeBtn.type = 'button'; closeBtn.className = 'local-hint-close'; closeBtn.setAttribute('aria-label', 'Больше не показывать'); closeBtn.textContent = '×';
+      bindTap(closeBtn, () => { banner.remove(); storageSet('localHintDismissed', 'true'); });
+      banner.append(textEl, setupBtn, closeBtn);
+      const composer = document.getElementById('form');
+      composer?.parentNode?.insertBefore(banner, composer);
+    }
 
 
     function renderInitialShell() {
