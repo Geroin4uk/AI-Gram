@@ -1378,7 +1378,7 @@
     .phone.desktop-split #homeScreen .create-menu { position: absolute; }
 
     /* --- 2b. Стилизованное выделение текста под тёмную тему --- */
-    ::selection { background: color-mix(in srgb, var(--accent) 38%, transparent); color: #fff; }
+    ::selection { background: color-mix(in srgb, var(--accent) 26%, transparent); }
     .message.me ::selection, .message.own ::selection { background: rgba(255,255,255,0.32); color: #fff; }
     /* Служебные части не выделяются и не попадают в копирование */
     .message .time, .message time, .message-status, .message-reactions,
@@ -1469,11 +1469,18 @@
 
     /* Баннер «локальная модель» над композером */
     .local-hint {
+      /* Лежит в grid-ячейке ленты (row 2) поверх сообщений, по центру, над композером —
+         одинаково во всех режимах, т.к. .chat-screen везде grid с этими рядами. */
+      grid-row: 2; grid-column: 1;
+      align-self: end; justify-self: center;
+      position: relative; z-index: 5;
       display: flex; align-items: center; gap: 10px;
-      margin: 0 12px 8px; padding: 10px 12px;
+      width: min(760px, calc(100% - 24px));
+      margin: 0 0 10px; padding: 10px 12px;
       border-radius: var(--radius-md);
-      background: color-mix(in srgb, var(--accent) 12%, transparent);
-      border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+      background: color-mix(in srgb, var(--panel) 86%, var(--accent) 14%);
+      border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent);
+      box-shadow: 0 10px 28px rgba(0,0,0,0.35);
       font-size: 13px; line-height: 1.35;
       animation: panelIn 0.3s var(--ease-spring);
     }
@@ -1494,9 +1501,20 @@
       padding: 14px;
       margin-top: 10px;
     }
-    .local-hint { width: min(760px, calc(100% - 24px)); margin: 0 auto 8px; }
     .changelog-list { display: flex; flex-direction: column; gap: 16px; max-height: min(56dvh, 560px); overflow-y: auto; padding-right: 4px; }
     .changelog-build-title { font-weight: 700; font-size: 14px; margin-bottom: 6px; color: var(--muted); letter-spacing: 0.02em; }
     .changelog-build-title.current { color: var(--accent); }
     .changelog-build .patch-note-row { margin-bottom: 6px; }
     /* =============== /POLISH v15 =============== */
+
+
+    /* =============== VISUAL v16 =============== */
+    /* Случайный драг мышью по фону ленты выделял текст всех пузырей разом (и наш яркий
+       ::selection делал это кричащим). Теперь фон ленты не выделяется, а текст внутри
+       пузыря — выделяется как обычно, если начать выделение с самого пузыря. */
+    .messages { user-select: none; -webkit-user-select: none; }
+    .message, .voice-transcript { user-select: text; -webkit-user-select: text; }
+    .message .time, .message time, .message-status, .message-reactions { user-select: none; -webkit-user-select: none; }
+    /* Страховка каскада: предел ширины пузыря с высокой специфичностью в конце файла */
+    .chat-screen .messages .message { max-width: min(78%, 640px); }
+    /* =============== /VISUAL v16 =============== */
