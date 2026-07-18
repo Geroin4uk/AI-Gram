@@ -411,7 +411,7 @@
     let providerModule = null;
     async function loadProviderModule() {
       if (providerModule) return providerModule;
-      providerModule = await import('./providers.mjs?v=a14');
+      providerModule = await import('./providers.mjs?v=p15');
       return providerModule;
     }
     AppContext.setApiConfig({ aiProvider, apiKey, apiModel });
@@ -1174,7 +1174,7 @@
     const uiState = { overlay: false, panel: null, menu: null };
     let lastFocusedBeforeModal = null;
     const FOCUSABLE_SELECTOR = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
-    const panelMap = { profile: profileCard, stats: chatStatsPanel, themes: themePanel, custom: customPanel, userProfile: userProfilePanel, api: apiPanel, apiGuide: apiGuidePanel, persona: personaPanel, ui: uiPanel, stickers: stickerPanel, tiles: tilePanel, plugin: document.getElementById('pluginPanel'), p2p: document.getElementById('p2pPanel'), catalog: document.getElementById('catalogPanel'), patchnotes: document.getElementById('patchNotesPanel') };
+    const panelMap = { profile: profileCard, stats: chatStatsPanel, themes: themePanel, custom: customPanel, userProfile: userProfilePanel, api: apiPanel, apiGuide: apiGuidePanel, persona: personaPanel, ui: uiPanel, stickers: stickerPanel, tiles: tilePanel, plugin: document.getElementById('pluginPanel'), p2p: document.getElementById('p2pPanel'), catalog: document.getElementById('catalogPanel'), patchnotes: document.getElementById('patchNotesPanel'), changelog: document.getElementById('changelogPanel') };
     const menuMap = { home: homeMenuPopover, chat: menuPopover, tile: tileContextMenu };
 
 
@@ -4569,6 +4569,7 @@
       if (action === 'plugin') switchSettingsPanel('plugin', renderPluginList);
       if (action === 'p2p') switchSettingsPanel('p2p');
       if (action === 'catalog') switchSettingsPanel('catalog', () => { renderCatalog(); refreshCloudCatalog(); });
+      if (action === 'changelog') switchSettingsPanel('changelog', renderChangelogPanel);
       if (action === 'custom') {
         const personaId = editablePersonaIdFromChat() || 'danil';
         if (!builtInPersonas[personaId]) { showToast('Кастомизация доступна в личном чате Данила или Ярика'); return; }
@@ -5968,7 +5969,7 @@
       { id: 'app:p2p', icon: '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>', label: 'P2P-чат', hint: 'связь с человеком' }
     );
     // Штамп сборки — чтобы сразу видеть, что загружена свежая версия (а не старый кеш).
-    const AIGRAM_BUILD = 'arch-14';
+    const AIGRAM_BUILD = 'polish-15';
     try {
       console.log('%cAI-Gram build: ' + AIGRAM_BUILD, 'color:#2aabee;font-weight:bold');
       const stampHost = document.querySelector('#uiPanel .settings-shortcuts');
@@ -6061,6 +6062,13 @@
 
     // ---- Патч-ноуты: показываются один раз при первом входе в новую сборку ----------
     const AIGRAM_CHANGELOG = {
+      'polish-15': [
+        'Новая вкладка «Что нового» в настройках — полная история обновлений по сборкам',
+        'Починены исчезающие патч-ноуты: раньше их «съедала» автоперезагрузка при обновлении приложения',
+        'Светлые темы: читаемые номера шагов в мастере, видимые переключатели, рамки вокруг блоков настройки',
+        'Пузыри сообщений больше не растягиваются во всю ширину широкого окна',
+        'Баннер про встроенные фразы стал компактным на больших мониторах'
+      ],
       'arch-14': [
         'Новые провайдеры: OpenAI (и совместимые — LM Studio, Ollama, OpenRouter) и Anthropic Claude',
         'Слой провайдеров вынесен в отдельный типизированный ES-модуль — начало модульной архитектуры',
@@ -6093,12 +6101,33 @@
         'Добавлены эти самые патч-ноуты — теперь вы всегда узнаете, что нового'
       ]
     };
+    // Полная история изменений: панель со всеми сборками (открывается из настроек)
+    function renderChangelogPanel() {
+      const list = document.getElementById('changelogList');
+      if (!list) return;
+      list.replaceChildren(...Object.entries(AIGRAM_CHANGELOG).map(([build, items]) => {
+        const section = document.createElement('div');
+        section.className = 'changelog-build';
+        const title = document.createElement('div');
+        title.className = 'changelog-build-title';
+        title.textContent = build === AIGRAM_BUILD ? `${build} · текущая` : build;
+        if (build === AIGRAM_BUILD) title.classList.add('current');
+        section.appendChild(title);
+        items.forEach(text => {
+          const row = document.createElement('div');
+          row.className = 'patch-note-row';
+          row.textContent = text;
+          section.appendChild(row);
+        });
+        return section;
+      }));
+    }
+
     function maybeShowPatchNotes() {
       const seen = storageGet('aigramLastSeenBuild', '');
       if (seen === AIGRAM_BUILD) return;
       // Свежая установка: не перекрываем онбординг, ноуты появятся при следующем входе
       if (!seen && !loadUserProfile()?.name) return;
-      storageSet('aigramLastSeenBuild', AIGRAM_BUILD);
       const notes = AIGRAM_CHANGELOG[AIGRAM_BUILD];
       if (!notes || !notes.length) return;
       const panel = document.getElementById('patchNotesPanel');
@@ -6116,6 +6145,10 @@
       panel.classList.add('open');
       uiState.panel = 'patchnotes';
       syncOverlay();
+      // Отмечаем просмотренным по факту закрытия (кнопка, Esc, любой путь через close()).
+      // Если страницу перезагрузит обновление Service Worker до закрытия — окно честно
+      // покажется снова после перезагрузки.
+      panel.addEventListener('close', () => storageSet('aigramLastSeenBuild', AIGRAM_BUILD), { once: true });
     }
 
     // ---- Общие share-коды (сжатие как в P2P, свой префикс и вид полезной нагрузки) ---

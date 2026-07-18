@@ -2,6 +2,8 @@
 
 # AI-Gram
 
+![CI](https://github.com/Geroin4uk/AI-Gram/actions/workflows/ci.yml/badge.svg)
+
 ### Telegram с ИИ-персонажами прямо в браузере
 
 PWA • Offline • Local AI • Google Gemini • Без сервера

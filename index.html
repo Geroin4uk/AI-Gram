@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>AI-Gram</title>
-  <link rel="stylesheet" href="css/app.css?v=a14" />
+  <link rel="stylesheet" href="css/app.css?v=p15" />
 </head>
 <body>
   <main class="phone" aria-label="Фейк Telegram">
@@ -519,6 +519,7 @@
         <button class="settings-card" type="button" data-settings-open="persona"><strong>Персонажи</strong><span>создание и список</span></button>
         <button class="settings-card" type="button" data-settings-open="custom"><strong>Текущий чат</strong><span>персонаж и стиль ответа</span></button>
         <button class="settings-card" type="button" data-settings-open="catalog"><strong>Каталог персонажей</strong><span>делиться и добавлять по коду</span></button>
+        <button class="settings-card" type="button" data-settings-open="changelog"><strong>Что нового</strong><span>история обновлений</span></button>
         <button class="settings-card" type="button" data-settings-open="plugin"><strong>Плагины</strong><span>свои боты и скрипты</span></button>
         <button class="settings-card" type="button" data-settings-open="p2p"><strong>P2P-чат</strong><span>связь с реальным человеком</span></button>
         <button class="settings-card" type="button" data-settings-open="personal"><strong>Чаты и уведомления</strong><span>фон, звук, вибрация</span></button>
@@ -683,6 +684,14 @@
       <div class="custom-actions"><button class="custom-btn" type="button" data-panel-close>Понятно</button></div>
     </dialog>
 
+    <dialog class="custom-panel changelog-panel has-settings-back" id="changelogPanel" aria-label="Что нового — история обновлений">
+      <button class="panel-close-btn" type="button" data-panel-close aria-label="Закрыть">×</button>
+      <button class="settings-back-btn" type="button" data-settings-back>‹ Настройки</button>
+      <div class="panel-title">Что нового</div>
+      <div class="panel-subtitle">История обновлений AI-Gram — от свежих к ранним.</div>
+      <div class="changelog-list" id="changelogList"></div>
+    </dialog>
+
     <dialog class="custom-panel p2p-panel has-settings-back" id="p2pPanel" aria-label="P2P-чат">
       <button class="panel-close-btn" type="button" data-panel-close aria-label="Закрыть">×</button>
       <button class="settings-back-btn" type="button" data-settings-back>‹ Настройки</button>
@@ -791,6 +800,6 @@
     <div class="toast" id="toast"></div>
   </main>
 
-  <script src="js/app.js?v=a14"></script>
+  <script src="js/app.js?v=p15"></script>
 </body>
 </html>

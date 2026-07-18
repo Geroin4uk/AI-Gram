@@ -378,7 +378,7 @@
     .neural-progress-fill { height: 100%; width: 0%; background: var(--accent); transition: width 0.25s ease; }
 
     .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
-    .switch { width: 52px; height: 30px; padding: 3px; border-radius: 999px; background: rgba(255,255,255,0.16); transition: background 0.18s ease, transform 0.16s ease, box-shadow 0.16s ease; }
+    .switch { width: 52px; height: 30px; padding: 3px; border-radius: 999px; background: color-mix(in srgb, var(--text) 22%, transparent); transition: background 0.18s ease, transform 0.16s ease, box-shadow 0.16s ease; }
     .switch:active { transform: scale(0.96); }
     .switch::before { content: ""; display: block; width: 24px; height: 24px; border-radius: 50%; background: white; transition: transform 0.18s ease; }
     .switch.on { background: var(--accent); }
@@ -1236,6 +1236,10 @@
       border-radius: 20px;
       line-height: 1.45;
       box-shadow: 0 3px 14px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.05);
+      /* Ограничение ширины теперь базовое: раньше жило только в мобильном медиа и
+         desktop-split, а в одноколоночном десктопе пузырь тянулся во всю ширину */
+      max-width: min(80%, 640px);
+      overflow-wrap: anywhere;
     }
     .message.him, .message:not(.me):not(.own) {
       background: linear-gradient(160deg, rgba(255,255,255,0.075), rgba(255,255,255,0.028)), var(--bubble-him, rgba(32,43,54,0.92));
@@ -1454,7 +1458,7 @@
     .step-num {
       flex: none; width: 26px; height: 26px; border-radius: 50%;
       display: grid; place-items: center;
-      background: var(--accent); color: #fff; font-weight: 700; font-size: 13px;
+      background: color-mix(in srgb, var(--accent) 45%, #14202c); color: #fff; font-weight: 700; font-size: 13px;
       margin-top: 1px;
     }
     .step-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -1478,3 +1482,21 @@
     .local-hint-close { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: var(--muted); background: none; border: 0; cursor: pointer; font-size: 16px; }
     .local-hint-close:hover { background: rgba(255,255,255,0.1); color: var(--text); }
     /* =============== /Простая настройка ИИ =============== */
+
+
+    /* =============== POLISH v15: рамки мастеров, баннер, история изменений =============== */
+    #apiSettingsExt .setup-steps, #yandexSettingsExt .setup-steps,
+    #openaiSettingsExt .setup-steps, #anthropicSettingsExt .setup-steps,
+    #neuralSettingsExt .custom-section {
+      background: color-mix(in srgb, var(--text) 5%, transparent);
+      border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+      border-radius: var(--radius-md);
+      padding: 14px;
+      margin-top: 10px;
+    }
+    .local-hint { width: min(760px, calc(100% - 24px)); margin: 0 auto 8px; }
+    .changelog-list { display: flex; flex-direction: column; gap: 16px; max-height: min(56dvh, 560px); overflow-y: auto; padding-right: 4px; }
+    .changelog-build-title { font-weight: 700; font-size: 14px; margin-bottom: 6px; color: var(--muted); letter-spacing: 0.02em; }
+    .changelog-build-title.current { color: var(--accent); }
+    .changelog-build .patch-note-row { margin-bottom: 6px; }
+    /* =============== /POLISH v15 =============== */
