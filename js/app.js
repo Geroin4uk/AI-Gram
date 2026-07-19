@@ -411,7 +411,7 @@
     let providerModule = null;
     async function loadProviderModule() {
       if (providerModule) return providerModule;
-      providerModule = await import('./providers.mjs?v=v16');
+      providerModule = await import('./providers.mjs?v=c17');
       return providerModule;
     }
     AppContext.setApiConfig({ aiProvider, apiKey, apiModel });
@@ -5969,7 +5969,7 @@
       { id: 'app:p2p', icon: '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>', label: 'P2P-чат', hint: 'связь с человеком' }
     );
     // Штамп сборки — чтобы сразу видеть, что загружена свежая версия (а не старый кеш).
-    const AIGRAM_BUILD = 'visual-16';
+    const AIGRAM_BUILD = 'calm-17';
     try {
       console.log('%cAI-Gram build: ' + AIGRAM_BUILD, 'color:#2aabee;font-weight:bold');
       const stampHost = document.querySelector('#uiPanel .settings-shortcuts');
@@ -6062,6 +6062,11 @@
 
     // ---- Патч-ноуты: показываются один раз при первом входе в новую сборку ----------
     const AIGRAM_CHANGELOG = {
+      'calm-17': [
+        'Убрана «вечная плашка» вокруг текста в каждом сообщении — тень ошибочно рисовалась прямо на тексте',
+        'Фон ленты чата теперь строится из цветов вашей темы: на светлых темах он больше не чужеродно-тёмный',
+        'Настройки: кнопки и карточки-подсказки больше не слипаются друг с другом'
+      ],
       'visual-16': [
         'Баннер про встроенные фразы больше не разъезжается: он аккуратно плавает по центру над полем ввода',
         'Случайное выделение мышью: драг по фону чата больше не «подсвечивает» текст всех сообщений разом',
