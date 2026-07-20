@@ -411,7 +411,7 @@
     let providerModule = null;
     async function loadProviderModule() {
       if (providerModule) return providerModule;
-      providerModule = await import('./providers.mjs?v=c17');
+      providerModule = await import('./providers.mjs?v=st18');
       return providerModule;
     }
     AppContext.setApiConfig({ aiProvider, apiKey, apiModel });
@@ -1479,6 +1479,7 @@
         style: 'custom',
         prompt: safeText(persona.prompt, '', 700),
         about: safeText(persona.about || persona.prompt, '', 130),
+        avatarImage: (() => { const raw = String(persona.avatarImage || ''); return /^data:image\/(?:png|jpe?g|webp);base64,[A-Za-z0-9+/=]+$/.test(raw) && raw.length <= 48000 ? raw : ''; })(),
         status: safeText(persona.status, 'Статус: свой персонаж с пользовательским промптом', 90)
       };
     }
@@ -1671,6 +1672,21 @@
     function activeChat() { return chats[activeChatId]; }
     function isP2pChat(chat) { return chat?.type === 'p2p'; }
     function chatName(chat) { if (isP2pChat(chat)) return chat.title || 'P2P-собеседник'; return chat.type === 'group' ? chat.title : (personas[chat.members[0]]?.name || 'Персонаж'); }
+    function chatAvatarImage(chat) {
+      if (!chat || chat.type !== 'dm') return '';
+      return personas[chat.members?.[0]]?.avatarImage || '';
+    }
+    // Навешивает картинку-аватар (если есть) поверх буквы/эмодзи
+    function applyAvatarImage(el, image) {
+      if (!el) return;
+      if (image) {
+        el.classList.add('avatar-img');
+        el.style.backgroundImage = `url("${image}")`;
+      } else {
+        el.classList.remove('avatar-img');
+        el.style.backgroundImage = '';
+      }
+    }
     function chatAvatar(chat) { if (isP2pChat(chat)) return (chat.title || 'P').trim().charAt(0).toUpperCase() || 'P'; return chat.type === 'group' ? chat.avatar : (personas[chat.members[0]]?.avatar || '✨'); }
     function chatCss(chat) { if (isP2pChat(chat)) return 'group-avatar'; return chat.type === 'group' ? 'group-avatar' : (personas[chat.members[0]]?.css || 'group-avatar'); }
 
@@ -1729,6 +1745,7 @@
       row.innerHTML = `<div class="avatar ${chatCss(chat)}">${escapeHtml(chatAvatar(chat))}</div>
         <div class="preview"><div class="name">${escapeHtml(name)}</div><div class="last">${previewHtml}</div></div>
         <div class="meta"><div class="row-time">${last?.time || now()}</div><div class="badge">${chat.unread || ''}</div></div>`;
+      applyAvatarImage(row.querySelector('.avatar'), chatAvatarImage(chat));
       return row;
     }
 
@@ -1840,6 +1857,7 @@
             <div class="tile-name">${escapeHtml(name)}</div>
           </div>
         </div>${chat.unread ? `<div class="tile-badge">${chat.unread}</div>` : ''}`;
+      applyAvatarImage(tile.querySelector('.tile-icon'), chatAvatarImage(chat));
       return tile;
     }
 
@@ -2487,6 +2505,7 @@
       chatTitle.textContent = chatName(chat);
       avatarBtn.textContent = chatAvatar(chat);
       avatarBtn.className = `avatar ${chatCss(chat)}`;
+      applyAvatarImage(avatarBtn, chatAvatarImage(chat));
       status.textContent = isP2pChat(chat) ? (p2pConnected() ? 'в сети · P2P' : 'не в сети · P2P') : chat.type === 'group' ? `${chat.members.length} ИИ-персонажа онлайн` : 'был в сети только что';
       updateTypingForActiveChat();
       messageInput.placeholder = messagePlaceholder(chat);
@@ -2858,6 +2877,7 @@
         const chat = activeChat();
         chatTitle.textContent = chatName(chat);
         avatarBtn.textContent = chatAvatar(chat);
+        applyAvatarImage(avatarBtn, chatAvatarImage(chat));
         avatarBtn.className = `avatar ${chatCss(chat)}`;
         messageInput.placeholder = messagePlaceholder(chat);
       }
@@ -3187,64 +3207,27 @@
       const cacheKey = `aiCache:${apiModel}:${apiKeyFingerprint}:${persona.id}:${userText.slice(0, 180)}:${imageData ? 'img' : 'txt'}`;
       const cached = getAiCacheValue(cacheKey);
       if (cached) return cached;
-      const url = `${API_CONFIG.geminiBaseUrl}/${apiModel}:streamGenerateContent?alt=sse`;
-      const contents = buildGeminiHistory(chat, persona, userText, imageData);
-      const res = await fetchWithRetry(url, {
-        method: 'POST',
-        signal,
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: buildSystemPrompt(persona, chat) }] },
-          contents,
-          generationConfig: { temperature: persona.id === 'yarik' ? 0.72 : 0.68, topP: 0.9, topK: 40, maxOutputTokens: 512 }
-        })
-      });
-      if (!res.ok) {
-        let data = null;
-        try { data = await res.json(); } catch { data = null; }
-        throw new Error(apiErrorMessage('Google AI', res.status, data));
-      }
+      // Сетевой слой мигрирован в js/providers.mjs; формат истории (contents с картинками,
+      // префиксы имён) осознанно готовится здесь — это доменная логика приложения.
+      const mod = await loadProviderModule();
       let raw = '';
-      const reader = res.body?.getReader?.();
-      const appendSsePayload = payload => {
-        const clean = String(payload || '').trim();
-        if (!clean || clean === '[DONE]') return;
-        const parsed = JSON.parse(clean);
-        raw += parsed.candidates?.[0]?.content?.parts?.map(part => part.text || '').join('') || '';
-      };
-      if (reader) {
-        const decoder = new TextDecoder();
-        let buffer = '';
-        while (true) {
-          const { value, done } = await reader.read();
-          buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
-          const events = buffer.split(/\r?\n\r?\n/);
-          buffer = done ? '' : events.pop() || '';
-          for (const event of events) {
-            const payload = event.split(/\r?\n/).filter(line => line.startsWith('data:')).map(line => line.replace(/^data:\s?/, '')).join('\n');
-            if (!payload) continue;
-            try { appendSsePayload(payload); }
-            catch (error) { logSafe('SSE chunk parse skipped', { code: error.name || 'json' }); }
-          }
-          // Live preview: push the accumulated text to the caller as it streams in.
-          if (onChunk && raw) { try { onChunk(raw); } catch {} }
-          if (done) break;
-        }
-        if (buffer.trim()) {
-          const payload = buffer.split(/\r?\n/).filter(line => line.startsWith('data:')).map(line => line.replace(/^data:\s?/, '')).join('\n');
-          if (payload) {
-            try { appendSsePayload(payload); }
-            catch (error) { logSafe('SSE trailing chunk parse skipped', { code: error.name || 'json' }); }
-          }
-        }
-      } else {
-        const data = await res.json().catch(() => null);
-        raw = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      try {
+        raw = await mod.PROVIDERS.gemini.complete({
+          messages: [],
+          geminiContents: buildGeminiHistory(chat, persona, userText, imageData),
+          systemPrompt: buildSystemPrompt(persona, chat),
+          apiKey,
+          model: apiModel,
+          baseUrl: API_CONFIG.geminiBaseUrl,
+          temperature: persona.id === 'yarik' ? 0.72 : 0.68,
+          maxTokens: 512,
+          signal,
+          onChunk: onChunk || undefined
+        });
+      } catch (error) {
+        if (error?.status) throw new Error(apiErrorMessage('Google AI', error.status, error.data));
+        throw error;
       }
-      // Bug fix: when the API returned an empty/filtered answer, the local fallback
-      // phrase used to be written into the AI cache under the API cache key — every
-      // later identical prompt then got the same canned line back "from the API".
-      // Only cache genuine model output.
       const cleaned = cleanAiReply(raw, persona);
       if (cleaned) {
         setAiCacheValue(cacheKey, cleaned);
@@ -3268,31 +3251,30 @@
       return [{ role: 'system', text: buildSystemPrompt(persona, chat) }, ...history];
     }
 
-    async function getYandexReply(userText, persona, chat, imageData = null, signal = null) {
+    async function getYandexReply(userText, persona, chat, imageData = null, signal = null, onChunk = null) {
       if (!yandexApiKey || !yandexFolderId) throw new Error('Не заполнены API-ключ и/или ID каталога Yandex Cloud');
       const model = yandexModel || API_CONFIG.defaultYandexModel;
       const cacheKey = `aiCache:yandex:${model}:${yandexApiKey.slice(0, 8)}:${persona.id}:${userText.slice(0, 180)}`;
       const cached = getAiCacheValue(cacheKey);
       if (cached) return cached;
-      // Text-only API: изображение не отправляется, но модель хотя бы знает, что оно было.
-      const effectiveText = imageData ? `${userText}\n[к сообщению приложено изображение — опиши, что мог бы прокомментировать по контексту]` : userText;
-      const res = await fetchWithRetry(API_CONFIG.yandexBaseUrl, {
-        method: 'POST',
-        signal,
-        headers: { 'Content-Type': 'application/json', Authorization: `Api-Key ${yandexApiKey}`, 'x-folder-id': yandexFolderId },
-        body: JSON.stringify({
-          modelUri: `gpt://${yandexFolderId}/${model}`,
-          completionOptions: { stream: false, temperature: persona.id === 'yarik' ? 0.72 : 0.68, maxTokens: String(APP_LIMITS.maxAiReplyLength * 2) },
-          messages: buildYandexMessages(chat, persona, effectiveText)
-        })
-      });
-      if (!res.ok) {
-        let data = null;
-        try { data = await res.json(); } catch { data = null; }
-        throw new Error(apiErrorMessage('Yandex Cloud', res.status, { error: { message: data?.message || data?.error?.message } }));
+      const effectiveText = imageData ? `${userText}\n[к сообщению приложено изображение — прокомментируй по контексту]` : userText;
+      const mod = await loadProviderModule();
+      let raw = '';
+      try {
+        raw = await mod.PROVIDERS.yandex.complete({
+          messages: buildYandexMessages(chat, persona, effectiveText).map(m => ({ role: m.role, content: m.text })),
+          apiKey: yandexApiKey,
+          folderId: yandexFolderId,
+          model,
+          temperature: persona.id === 'yarik' ? 0.72 : 0.68,
+          maxTokens: APP_LIMITS.maxAiReplyLength * 2,
+          signal,
+          onChunk: onChunk || undefined
+        });
+      } catch (error) {
+        if (error?.status) throw new Error(apiErrorMessage('Yandex Cloud', error.status, { error: { message: error.data?.message || error.data?.error?.message } }));
+        throw error;
       }
-      const data = await res.json().catch(() => null);
-      const raw = data?.result?.alternatives?.[0]?.message?.text || '';
       const cleaned = cleanAiReply(raw, persona);
       if (cleaned) {
         setAiCacheValue(cacheKey, cleaned);
@@ -3774,9 +3756,7 @@
         case 'gemma':
           return getGemmaReply(userText, persona, chat, imageData, signal, onChunk);
         case 'yandex':
-          // Синхронный (нестриминговый) режим Yandex Cloud — onChunk не вызывается,
-          // вызывающий код сам покажет финальный текст печатающим эффектом.
-          return getYandexReply(userText, persona, chat, imageData, signal);
+          return getYandexReply(userText, persona, chat, imageData, signal, onChunk);
         case 'openai':
         case 'anthropic': {
           // Новый модульный слой (js/providers.mjs): единый контракт complete(ctx)
@@ -3790,7 +3770,8 @@
             baseUrl: aiProvider === 'openai' ? openaiBaseUrl : undefined,
             maxTokens: APP_LIMITS.maxAiReplyLength * 2,
             temperature: persona.id === 'yarik' ? 0.72 : 0.68,
-            signal
+            signal,
+            onChunk: onChunk || undefined
           });
           const cleaned = cleanAiReply(raw, persona);
           return cleaned || getLocalReply(userText, persona, chat);
@@ -4599,6 +4580,7 @@
         : chat.type === 'group' ? { name: chat.title, handle: '@ai_group_room', avatar: chat.avatar, css: 'group-avatar', status: `Статус: ${chat.members.length} ИИ-персонажа общаются с тобой и между собой`, about: 'О себе: групповой чат для Данила, Ярика и пользователя.' } : personas[chat.members[0]];
       document.getElementById('profileAvatar').textContent = persona.avatar;
       document.getElementById('profileAvatar').className = `big-avatar ${persona.css}`;
+      applyAvatarImage(document.getElementById('profileAvatar'), persona.avatarImage || '');
       document.getElementById('profileName').textContent = persona.name;
       document.getElementById('profileHandle').textContent = persona.handle;
       document.getElementById('profileStatus').textContent = persona.status;
@@ -4643,6 +4625,7 @@
         name,
         handle: '@' + name.toLowerCase().replace(/[^а-яёa-z0-9]+/gi, '_').replace(/^_+|_+$/g, '').slice(0, 24),
         avatar: personaAvatarInput.value.trim() || name[0].toUpperCase(),
+        avatarImage: pendingPersonaAvatar || '',
         css: 'group-avatar',
         style: 'custom',
         prompt,
@@ -5281,6 +5264,40 @@
     bindTap(clearAttachmentBtn, clearAttachmentPreview);
     imageInput.addEventListener('change', () => { showAttachmentPreview(imageInput.files[0]); imageInput.value = ''; });
     bindTap(document.getElementById('openPersonaBtn'), openPersonaPanel);
+    // --- Фото-аватар персонажа: сжатие на канвасе до 96×96, хранится dataURL ---
+    let pendingPersonaAvatar = '';
+    const personaAvatarPreview = document.getElementById('personaAvatarPreview');
+    const personaAvatarFile = document.getElementById('personaAvatarFile');
+    const personaAvatarClearBtn = document.getElementById('personaAvatarClearBtn');
+    function renderPersonaAvatarPreview() {
+      if (!personaAvatarPreview) return;
+      personaAvatarPreview.style.backgroundImage = pendingPersonaAvatar ? `url("${pendingPersonaAvatar}")` : '';
+      personaAvatarPreview.textContent = pendingPersonaAvatar ? '' : '✦';
+      if (personaAvatarClearBtn) personaAvatarClearBtn.hidden = !pendingPersonaAvatar;
+    }
+    bindTap(document.getElementById('personaAvatarPickBtn'), () => personaAvatarFile?.click());
+    bindTap(personaAvatarClearBtn, () => { pendingPersonaAvatar = ''; renderPersonaAvatarPreview(); });
+    personaAvatarFile?.addEventListener('change', () => {
+      const file = personaAvatarFile.files?.[0];
+      personaAvatarFile.value = '';
+      if (!file || !file.type.startsWith('image/')) return;
+      const img = new Image();
+      img.onload = () => {
+        const size = 96;
+        const canvas = document.createElement('canvas');
+        canvas.width = size; canvas.height = size;
+        const g = canvas.getContext('2d');
+        const scale = Math.max(size / img.width, size / img.height);
+        const w = img.width * scale, h = img.height * scale;
+        g.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+        pendingPersonaAvatar = canvas.toDataURL('image/jpeg', 0.82);
+        URL.revokeObjectURL(img.src);
+        renderPersonaAvatarPreview();
+      };
+      img.onerror = () => { URL.revokeObjectURL(img.src); showToast('Не удалось прочитать картинку'); };
+      img.src = URL.createObjectURL(file);
+    });
+
     bindTap(document.getElementById('savePersonaBtn'), createCustomPersona);
     bindTap(document.getElementById('clearPersonaFormBtn'), () => { personaNameInput.value = ''; personaAvatarInput.value = ''; personaPromptInput.value = ''; });
     bindTap(document.getElementById('newChatBtn'), () => { if (!chats.group) setChats({ ...chats, group: defaultChats().group }); saveChats(); openChat('group'); });
@@ -5969,7 +5986,7 @@
       { id: 'app:p2p', icon: '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>', label: 'P2P-чат', hint: 'связь с человеком' }
     );
     // Штамп сборки — чтобы сразу видеть, что загружена свежая версия (а не старый кеш).
-    const AIGRAM_BUILD = 'calm-17';
+    const AIGRAM_BUILD = 'stream-18';
     try {
       console.log('%cAI-Gram build: ' + AIGRAM_BUILD, 'color:#2aabee;font-weight:bold');
       const stampHost = document.querySelector('#uiPanel .settings-shortcuts');
@@ -6062,6 +6079,12 @@
 
     // ---- Патч-ноуты: показываются один раз при первом входе в новую сборку ----------
     const AIGRAM_CHANGELOG = {
+      'stream-18': [
+        'Стриминг ответов теперь у всех облачных провайдеров: OpenAI, Claude и YandexGPT печатают вживую, как Gemini',
+        'Фото-аватарки персонажей: загрузите картинку при создании — она появится в чатах, плитках, каталоге и share-кодах',
+        'Gemini и Yandex переехали в модульный слой провайдеров — вся сетевая логика теперь в одном типизированном модуле',
+        'Баннер-подсказка стал стеклянным и в тон чата — больше не выглядит чужеродной плитой'
+      ],
       'calm-17': [
         'Убрана «вечная плашка» вокруг текста в каждом сообщении — тень ошибочно рисовалась прямо на тексте',
         'Фон ленты чата теперь строится из цветов вашей темы: на светлых темах он больше не чужеродно-тёмный',
@@ -6182,8 +6205,9 @@
       const name = String(item?.name || '').trim().slice(0, 40);
       const prompt = String(item?.prompt || '').trim().slice(0, 2000);
       const avatar = String(item?.avatar || '').trim().slice(0, 4);
+      const avatarImage = (() => { const raw = String(item?.avatarImage || ''); return /^data:image\/(?:png|jpe?g|webp);base64,[A-Za-z0-9+/=]+$/.test(raw) && raw.length <= 48000 ? raw : ''; })();
       if (!name || !prompt) return null;
-      return { name, prompt, avatar };
+      return { name, prompt, avatar, avatarImage };
     }
     function sanitizePluginPayload(item) {
       const name = String(item?.name || '').trim().slice(0, 40);
@@ -6202,6 +6226,7 @@
         name: clean.name,
         handle: '@' + clean.name.toLowerCase().replace(/[^а-яёa-z0-9]+/gi, '_').replace(/^_+|_+$/g, '').slice(0, 24),
         avatar: clean.avatar || clean.name[0].toUpperCase(),
+        avatarImage: clean.avatarImage || '',
         css: 'group-avatar',
         style: 'custom',
         prompt: clean.prompt,
@@ -6354,6 +6379,7 @@
         head.className = 'catalog-card-head';
         const ava = document.createElement('div');
         ava.className = 'avatar group-avatar catalog-ava';
+        applyAvatarImage(ava, (typeof persona !== 'undefined' ? persona?.avatarImage : (typeof item !== 'undefined' ? item?.avatarImage : '')) || '');
         ava.textContent = persona.avatar || persona.name[0];
         const title = document.createElement('div');
         title.innerHTML = `<div class="catalog-name"></div><div class="catalog-about"></div>`;
@@ -6370,7 +6396,10 @@
           const codeBtn = document.createElement('button');
           codeBtn.type = 'button'; codeBtn.className = 'mini-action'; codeBtn.textContent = 'Код';
           bindTap(codeBtn, async () => {
-            const code = await makeShareCode('persona', { name: persona.name, prompt: persona.prompt, avatar: persona.avatar });
+            const payload = { name: persona.name, prompt: persona.prompt, avatar: persona.avatar };
+            // Картинку кладём в код, только если она не раздует его сверх разумного для копипасты
+            if (persona.avatarImage && persona.avatarImage.length <= 32000) payload.avatarImage = persona.avatarImage;
+            const code = await makeShareCode('persona', payload);
             const ok = await copyTextToClipboard(code);
             showToast(ok ? `Код персонажа «${persona.name}» скопирован` : 'Скопируйте код вручную из консоли');
           });
@@ -6384,7 +6413,7 @@
             sendBtn.type = 'button'; sendBtn.className = 'mini-action'; sendBtn.textContent = '→P2P';
             bindTap(sendBtn, () => {
               try {
-                p2p.dc.send(JSON.stringify({ t: 'share', kind: 'persona', item: { name: persona.name, prompt: persona.prompt, avatar: persona.avatar } }));
+                p2p.dc.send(JSON.stringify({ t: 'share', kind: 'persona', item: { name: persona.name, prompt: persona.prompt, avatar: persona.avatar, avatarImage: (persona.avatarImage && persona.avatarImage.length <= 32000) ? persona.avatarImage : '' } }));
                 showToast(`Персонаж отправлен собеседнику`);
               } catch { showToast('Не удалось отправить'); }
             });
@@ -6418,6 +6447,7 @@
             head.className = 'catalog-card-head';
             const ava = document.createElement('div');
             ava.className = 'avatar group-avatar catalog-ava';
+        applyAvatarImage(ava, (typeof persona !== 'undefined' ? persona?.avatarImage : (typeof item !== 'undefined' ? item?.avatarImage : '')) || '');
             ava.textContent = item.avatar || item.name[0];
             const title = document.createElement('div');
             title.innerHTML = '<div class="catalog-name"></div><div class="catalog-about"></div>';

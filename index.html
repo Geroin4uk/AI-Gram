@@ -13,7 +13,7 @@
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>AI-Gram</title>
-  <link rel="stylesheet" href="css/app.css?v=c17" />
+  <link rel="stylesheet" href="css/app.css?v=st18" />
 </head>
 <body>
   <main class="phone" aria-label="Фейк Telegram">
@@ -740,6 +740,13 @@
       <div class="custom-section">
         <label class="custom-label" for="personaAvatarInput">Аватар / эмодзи / буква</label>
         <input class="custom-input" id="personaAvatarInput" maxlength="4" placeholder="✨" autocomplete="off" />
+        <div class="persona-avatar-row">
+          <div class="persona-avatar-preview" id="personaAvatarPreview">✦</div>
+          <input type="file" id="personaAvatarFile" accept="image/*" hidden />
+          <button class="mini-action" id="personaAvatarPickBtn" type="button">Фото…</button>
+          <button class="mini-action" id="personaAvatarClearBtn" type="button" hidden>Убрать фото</button>
+        </div>
+        <div class="panel-subtitle">Картинка сожмётся до 96×96 и заменит букву в аватаре. Работает в чатах, каталоге и share-кодах.</div>
       </div>
       <div class="custom-section">
         <label class="custom-label" for="personaPromptInput">Промпт поведения</label>
@@ -800,6 +807,6 @@
     <div class="toast" id="toast"></div>
   </main>
 
-  <script src="js/app.js?v=c17"></script>
+  <script src="js/app.js?v=st18"></script>
 </body>
 </html>
